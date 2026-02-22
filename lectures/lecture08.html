@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 8: Imitation Learning &amp; RLHF — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 8</div>
+    <h2>Imitation Learning &amp; RLHF</h2>
+    <p class="lecture-desc">Learning from demonstrations with DAgger, reward learning from human preferences, and aligning language models with RLHF and DPO.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Behavioral Cloning</span>
+      <span class="lecture-tag">DAgger</span>
+      <span class="lecture-tag">RLHF</span>
+      <span class="lecture-tag">DPO</span>
+      <span class="lecture-tag">Bradley-Terry</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture8pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 1: Imitation Learning                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="imitation-learning">Imitation Learning</h2>
+
+    <p>
+      So far in this course, we have assumed the agent has access to a reward function that
+      defines the task it should solve. But in many real-world settings&mdash;autonomous driving,
+      robotic manipulation, dialogue systems&mdash;specifying a reward function is extremely
+      difficult. What if, instead, we have access to an <em>expert</em> who can demonstrate
+      the desired behavior? <strong>Imitation learning</strong> is the family of methods that
+      learns a policy directly from expert demonstrations, bypassing the need for an explicit
+      reward signal.
+    </p>
+
+    <p>
+      The simplest form of imitation learning is <strong>behavioral cloning</strong>, which
+      treats the problem as a straightforward supervised learning task.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Behavioral Cloning</div>
+      <p>
+        Given a dataset of expert demonstrations $\{(s_t, a_t)\}$ collected by rolling out
+        an expert policy $\pi^*$, behavioral cloning trains a parameterized policy
+        $\pi_\theta$ by minimizing a supervised loss:
+      </p>
+      $$\min_\theta \sum_{(s,a) \in \mathcal{D}} \ell\!\left(\pi_\theta(s),\; a\right)$$
+      <p>
+        where $\ell$ is a suitable loss function (cross-entropy for discrete actions,
+        mean squared error for continuous actions). The training data consists of
+        state-action pairs drawn from the expert's state distribution $d^{\pi^*}$.
+      </p>
+    </div>
+
+    <p>
+      Behavioral cloning is appealingly simple: collect demonstrations, train a classifier
+      or regressor, and deploy. However, it harbors a subtle but critical failure mode that
+      arises from the sequential nature of decision-making.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 2: Distribution Shift and Compounding Errors   -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="compounding-errors">The Compounding Error Problem</h2>
+
+    <p>
+      Supervised learning assumes that training and test data are drawn from the same
+      distribution. Behavioral cloning violates this assumption in a fundamental way.
+      During <em>training</em>, the state-action pairs come from the expert's trajectory
+      distribution: $s_t \sim d^{\pi^*}$. At <em>test time</em>, however, the learned
+      policy $\pi_\theta$ generates its own trajectory, visiting states drawn from its
+      own distribution: $s_t \sim d^{\pi_\theta}$. Any small mistake early in the trajectory
+      pushes the agent into states the expert never visited&mdash;states where the cloned
+      policy has no useful training signal&mdash;leading to further errors that cascade.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-label">Distribution Shift Intuition</div>
+      <p>
+        Consider a self-driving car trained via behavioral cloning. The expert always stays
+        centered in the lane, so the training data only contains near-centered states. If
+        the learned policy drifts slightly to the left, it enters a state unlike anything
+        in the training data and may overcorrect or fail entirely. Each error compounds:
+        one mistake at time $t$ makes all future states unfamiliar, causing more mistakes.
+      </p>
+      <p>
+        If the per-step error probability is $\epsilon$, naive analysis suggests total
+        expected errors of $\epsilon T$ (treating errors as independent). But with
+        distribution shift and compounding, the true scaling is:
+      </p>
+      $$\mathbb{E}[\text{total errors}] \propto \epsilon T^2$$
+      <p>
+        This quadratic dependence on the horizon $T$ means that even small per-step errors
+        become catastrophic in long-horizon tasks. This result is formalized by Ross et al.
+        (2011) in "A Reduction of Imitation Learning and Structured Prediction to
+        No-Regret Online Learning."
+      </p>
+    </div>
+
+    <p>
+      The key insight is that behavioral cloning treats each state-action pair as independent
+      and identically distributed, ignoring the temporal structure of decision-making. In a
+      standard supervised learning setting, a small test-time error on one example does not
+      affect the input distribution of subsequent examples. In an MDP, however, the current
+      state depends on all previous actions. This mismatch between the expert's state
+      distribution $d^{\pi^*}$ (used at training time) and the learner's state distribution
+      $d^{\pi_\theta}$ (encountered at test time) is the root cause of compounding errors.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 3: DAgger                                       -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="dagger">DAgger: Dataset Aggregation</h2>
+
+    <p>
+      <strong>DAgger</strong> (Dataset Aggregation), introduced by Ross, Gordon, and Bagnell
+      (2011), addresses the distribution shift problem head-on. The central idea is simple
+      but powerful: instead of training only on the expert's state distribution, iteratively
+      collect labels on states that the <em>learner</em> actually visits.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; DAgger</div>
+      <p>
+        DAgger is an iterative imitation learning algorithm that aggregates training data
+        across multiple rounds. In each round, the current learned policy is executed in
+        the environment to collect a set of visited states. The expert then labels these
+        states with the correct actions, and the resulting state-action pairs are added to
+        the training dataset. The policy is re-trained on the entire aggregated dataset.
+      </p>
+      <p>
+        By training on states from the learner's own distribution, DAgger directly
+        addresses the train-test distribution mismatch that plagues behavioral cloning.
+      </p>
+    </div>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: DAgger (Dataset Aggregation)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> dataset $\mathcal{D} \leftarrow \emptyset$. Train initial policy $\hat{\pi}_1$ from expert demonstrations.</li>
+        <li><span class="keyword">For</span> $n = 1, 2, \ldots, N$:</li>
+        <li style="list-style: none; padding-left: 20px;">
+          (a) Execute $\hat{\pi}_n$ in the environment to collect a trajectory of visited states $\{s_1, s_2, \ldots, s_T\}$.
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
+          (b) Query the expert $\pi^*$ on these states to obtain labels: $\mathcal{D}_n = \{(s_t, \pi^*(s_t))\}$.
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
+          (c) Aggregate datasets: $\mathcal{D} \leftarrow \mathcal{D} \cup \mathcal{D}_n$.
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
+          (d) Train $\hat{\pi}_{n+1}$ on the full aggregated dataset $\mathcal{D}$.
+        </li>
+      </ol>
+      <p class="comment">
+        The key step is (b): the expert provides corrective labels for the states that the
+        learner actually encounters, not just states the expert would have visited.
+      </p>
+    </div>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; DAgger Regret Bound</div>
+      <p>
+        Let $\hat{\pi}$ be the policy returned by DAgger after $N$ rounds, and let
+        $\epsilon_N = \min_{n \in 1..N} \epsilon_n$ be the best per-step classification
+        error achieved on the aggregated dataset. Then the expected cost (total
+        errors over horizon $T$) under $\hat{\pi}$ satisfies:
+      </p>
+      $$J(\hat{\pi}) \leq J(\pi^*) + T \epsilon_N + O(1/N)$$
+      <p>
+        As $N \to \infty$, the regret scales as $O(\epsilon T)$&mdash;linear in $T$,
+        not quadratic. This matches the "no distribution shift" case and is a significant
+        improvement over behavioral cloning's $O(\epsilon T^2)$ scaling.
+      </p>
+    </div>
+
+    <p>
+      DAgger produces a stationary, deterministic policy with provably good performance
+      under its own induced state distribution. The crucial trade-off is that DAgger
+      requires <em>interactive access</em> to the expert: the expert must be available
+      to label new states in each round. This is feasible in some domains (e.g., a
+      simulator where an expert controller can be queried), but may be impractical when
+      the expert is a human who cannot be called upon repeatedly. This limitation
+      motivates alternative approaches that can learn from weaker forms of human feedback.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 4: Reward Learning from Human Preferences      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="reward-learning">Reward Learning from Human Preferences</h2>
+
+    <p>
+      In many settings, we want an RL agent whose behavior aligns with human values, but
+      we lack an explicit reward function and cannot easily produce expert demonstrations.
+      A compelling alternative is to learn a reward function from <strong>human
+      preferences</strong>&mdash;specifically, from pairwise comparisons. Instead of asking
+      a human "how much do you like this behavior?" (which yields noisy, poorly calibrated
+      scalar ratings), we ask "which of these two behaviors do you prefer?" Pairwise
+      comparisons are often more reliable and easier for humans to provide.
+    </p>
+
+    <p>
+      This approach occupies a sweet spot in the spectrum of human supervision. At one
+      extreme, full demonstrations (behavioral cloning, DAgger) require the expert to
+      show the correct action in every state. At the other extreme, learning with no
+      human input requires a hand-coded reward. Pairwise preference labels sit in between:
+      they require less human effort than constant demonstrations while providing a richer
+      signal than a fixed reward function.
+    </p>
+
+    <h3 id="inverse-rl-ambiguity">The Reward Ambiguity Problem</h3>
+
+    <p>
+      Before diving into preference models, it is worth noting a fundamental difficulty
+      with learning rewards from behavior. Given a set of expert demonstrations and knowledge
+      of the transition dynamics, there are infinitely many reward functions that make the
+      expert's policy optimal. This is the core challenge of <strong>inverse reinforcement
+      learning</strong>: the mapping from optimal behavior to reward is one-to-many. For
+      instance, the trivial reward $R(s,a) = 0$ for all $(s,a)$ makes every policy optimal.
+      To obtain a useful reward function, we need additional structure or assumptions.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 5: Bradley-Terry Model                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="bradley-terry">The Bradley-Terry Model</h2>
+
+    <p>
+      The <strong>Bradley-Terry model</strong> (1952) provides exactly the structural
+      assumption needed to learn rewards from pairwise comparisons. Originally developed
+      for ranking competitors in tournaments, it connects latent "strength" scores (which
+      we interpret as rewards) to observable preference probabilities.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Bradley-Terry Model</div>
+      <p>
+        Given $K$ items $b_1, b_2, \ldots, b_K$ with latent reward scores $r(b_i)$, the
+        probability that a human prefers item $b_i$ over item $b_j$ is:
+      </p>
+      $$P(b_i \succ b_j) = \frac{\exp(r(b_i))}{\exp(r(b_i)) + \exp(r(b_j))} = \sigma\!\left(r(b_i) - r(b_j)\right)$$
+      <p>
+        where $\sigma(\cdot)$ is the logistic sigmoid function. The model is transitive:
+        the pairwise probability $P(b_i \succ b_k)$ is fully determined by $P(b_i \succ b_j)$
+        and $P(b_j \succ b_k)$.
+      </p>
+    </div>
+
+    <p>
+      To fit the parameters of a Bradley-Terry model, suppose we have a dataset
+      $\mathcal{D}$ of $N$ tuples $(b_i, b_j, \mu)$ where $\mu = 1$ if the human
+      preferred $b_i$, $\mu = 0$ if the human preferred $b_j$, and $\mu = 0.5$
+      for a tie. The reward parameters are learned by maximizing the likelihood of the
+      observed comparisons, which amounts to minimizing the cross-entropy loss:
+    </p>
+
+    $$\mathcal{L}(r) = -\sum_{(b_i, b_j, \mu) \in \mathcal{D}} \left[\mu \log P(b_i \succ b_j) + (1 - \mu) \log P(b_j \succ b_i)\right]$$
+
+    <h3 id="trajectory-preferences">Extending to Trajectory Preferences</h3>
+
+    <p>
+      The Bradley-Terry framework extends naturally from individual items to entire
+      trajectories. Given two trajectories $\tau^1$ and $\tau^2$, define the trajectory
+      reward as the sum of per-step rewards: $R(\tau) = \sum_{t=0}^{T-1} r(s_t, a_t)$.
+      The probability that a human prefers trajectory $\tau^1$ over $\tau^2$ is then:
+    </p>
+
+    $$P(\tau^1 \succ \tau^2) = \frac{\exp\!\left(\sum_{t=0}^{T-1} r^1_t\right)}{\exp\!\left(\sum_{t=0}^{T-1} r^1_t\right) + \exp\!\left(\sum_{t=0}^{T-1} r^2_t\right)} = \sigma\!\left(R(\tau^1) - R(\tau^2)\right)$$
+
+    <p>
+      This formulation lets us learn a per-step reward function $r_\phi(s, a)$
+      (parameterized by a neural network $\phi$) from trajectory-level preference labels.
+      Once trained, this reward model can be used with any RL algorithm&mdash;such as
+      PPO&mdash;to optimize a policy.
+    </p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Learning to Backflip from Human Preferences</div>
+      <p>
+        Christiano et al. (2017) demonstrated that a simulated robot could learn to perform
+        a backflip using only 900 bits of human feedback. A human evaluator was shown pairs
+        of short video clips of the robot's behavior and asked which clip showed better
+        progress toward a backflip. These pairwise labels were used to train a reward model
+        via the Bradley-Terry framework, and PPO optimized the robot's policy against this
+        learned reward. The result was a fluid backflip&mdash;achieved without ever writing
+        down a mathematical reward function for "backflipping."
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 6: RLHF Pipeline                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="rlhf">Reinforcement Learning from Human Feedback (RLHF)</h2>
+
+    <p>
+      The ideas of reward learning from human preferences have found their most prominent
+      application in <strong>aligning large language models (LLMs)</strong>. The RLHF
+      pipeline, used in systems like InstructGPT and ChatGPT, combines supervised
+      fine-tuning, reward modeling, and reinforcement learning into a coherent training
+      procedure that steers language model outputs toward human preferences.
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: The RLHF Pipeline</div>
+      <ol>
+        <li>
+          <strong>Step 1 &mdash; Supervised Fine-Tuning (SFT).</strong>
+          Start with a pretrained language model $\pi_{\text{ref}}$. Fine-tune it on a
+          dataset of high-quality demonstrations (e.g., human-written instruction-response
+          pairs) to obtain an instruction-following base model.
+        </li>
+        <li style="margin-top: 10px;">
+          <strong>Step 2 &mdash; Reward Model Training.</strong>
+          Sample pairs of responses $(y_w, y_l)$ from the SFT model for a given prompt $x$.
+          Collect human preference labels indicating which response is better.
+          Train a reward model $r_\phi(x, y)$ by minimizing the Bradley-Terry loss:
+          $$\mathcal{L}(\phi) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}}\!\left[\log \sigma\!\left(r_\phi(x, y_w) - r_\phi(x, y_l)\right)\right]$$
+          where $y_w$ is the preferred (winning) response and $y_l$ is the dispreferred
+          (losing) response.
+        </li>
+        <li style="margin-top: 10px;">
+          <strong>Step 3 &mdash; RL Fine-Tuning with KL Constraint.</strong>
+          Optimize the language model policy $\pi_\theta$ to maximize the learned reward
+          while staying close to the reference model $\pi_{\text{ref}}$:
+          $$\max_\theta \;\mathbb{E}_{x \sim \mathcal{D},\; y \sim \pi_\theta(\cdot \mid x)}\!\left[r_\phi(x, y)\right] - \beta\, D_{\text{KL}}\!\left(\pi_\theta \| \pi_{\text{ref}}\right)$$
+          This is typically optimized using PPO. The KL penalty prevents the policy from
+          diverging too far from the pretrained model, which would lead to reward hacking
+          and degenerate outputs.
+        </li>
+      </ol>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Why the KL Constraint Matters</div>
+      <p>
+        Without the KL penalty, the RL optimization would find adversarial outputs that
+        exploit weaknesses in the learned reward model&mdash;a phenomenon known as
+        <strong>reward hacking</strong> or <strong>reward over-optimization</strong>.
+        The reward model is an imperfect proxy for true human preferences, so maximizing
+        it without constraint can lead to outputs that score highly according to $r_\phi$
+        but are gibberish or degenerate to a human reader.
+      </p>
+      <p>
+        The KL term $D_{\text{KL}}(\pi_\theta \| \pi_{\text{ref}})$ acts as a regularizer,
+        anchoring the optimized policy to the pretrained model. In the per-token formulation
+        used in practice, the modified reward at each step is:
+      </p>
+      $$\tilde{r}(x, y) = r_\phi(x, y) - \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$$
+      <p>
+        The strength of this penalty is controlled by the hyperparameter $\beta$. Larger
+        $\beta$ keeps the policy closer to the reference but limits improvement; smaller
+        $\beta$ allows more reward optimization but risks reward hacking.
+      </p>
+    </div>
+
+    <p>
+      The effectiveness of RLHF has been demonstrated at scale. Stiennon et al. (2020)
+      showed that RLHF significantly improved the quality of text summarization beyond
+      what supervised fine-tuning alone could achieve. Ouyang et al. (2022) scaled the
+      approach to InstructGPT, applying RLHF across tens of thousands of tasks. Notably,
+      a 1.3 billion parameter model fine-tuned with RLHF was preferred by human evaluators
+      over a 175 billion parameter model without RLHF, demonstrating that alignment
+      training can be more impactful than raw scale.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 7: DPO                                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="dpo">Direct Preference Optimization (DPO)</h2>
+
+    <p>
+      While RLHF is effective, its three-stage pipeline is complex: it requires training
+      a separate reward model, running an RL algorithm (typically PPO) with all its
+      hyperparameter sensitivity, and managing the interplay between the policy, reward
+      model, and KL constraint. <strong>Direct Preference Optimization (DPO)</strong>,
+      introduced by Rafailov et al. (2023), eliminates the need for both the explicit
+      reward model and the RL optimization loop, collapsing the entire procedure into a
+      single supervised learning objective.
+    </p>
+
+    <h3 id="dpo-derivation">Deriving DPO from the KL-Constrained Objective</h3>
+
+    <p>
+      The derivation of DPO begins with the KL-constrained RL objective used in RLHF:
+    </p>
+
+    $$\max_\pi \;\mathbb{E}_{y \sim \pi(\cdot \mid x)}\!\left[r(x, y)\right] - \beta\, D_{\text{KL}}\!\left(\pi(\cdot \mid x) \| \pi_{\text{ref}}(\cdot \mid x)\right)$$
+
+    <p>
+      This optimization problem has a closed-form solution. The optimal policy
+      $\pi^*$ for this objective can be written analytically as:
+    </p>
+
+    $$\pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_{\text{ref}}(y \mid x)\, \exp\!\left(\frac{1}{\beta}\, r(x, y)\right)$$
+
+    <p>
+      where $Z(x) = \sum_y \pi_{\text{ref}}(y \mid x) \exp\!\left(\frac{1}{\beta}\, r(x, y)\right)$ is
+      a normalizing partition function. This closed-form optimal policy is from prior work
+      and is a standard result in KL-regularized RL.
+    </p>
+
+    <p>
+      The key DPO insight is to <em>rearrange</em> this relationship. Instead of writing
+      the optimal policy as a function of the reward, we write the reward as a function
+      of the optimal policy. Solving for $r(x, y)$:
+    </p>
+
+    $$r(x, y) = \beta \log \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x)$$
+
+    <p>
+      Now substitute this expression for the reward into the Bradley-Terry preference model.
+      Because the Bradley-Terry loss depends only on the <em>difference</em> in rewards
+      between the preferred and dispreferred responses, the partition function $Z(x)$
+      cancels:
+    </p>
+
+    $$r(x, y_w) - r(x, y_l) = \beta \log \frac{\pi^*(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi^*(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}$$
+
+    <p>
+      This yields the DPO loss function, which optimizes the policy directly from
+      preference data:
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; DPO Loss</div>
+      <p>
+        The Direct Preference Optimization loss is:
+      </p>
+      $$\mathcal{L}_{\text{DPO}}(\theta) = -\mathbb{E}_{(x, y_w, y_l) \sim \mathcal{D}} \left[\log \sigma\!\left(\beta \log \frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \beta \log \frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)}\right)\right]$$
+      <p>
+        where $\sigma$ is the logistic sigmoid, $y_w$ is the preferred response,
+        $y_l$ is the dispreferred response, $\pi_\theta$ is the policy being optimized,
+        $\pi_{\text{ref}}$ is the frozen reference model, and $\beta$ controls the
+        deviation strength.
+      </p>
+    </div>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; DPO-RLHF Equivalence</div>
+      <p>
+        Under the Bradley-Terry preference model and the KL-constrained RL objective,
+        optimizing the DPO loss $\mathcal{L}_{\text{DPO}}(\theta)$ yields the same
+        optimal policy as the full RLHF pipeline (reward model training followed by
+        KL-constrained RL). DPO implicitly learns a reward model whose optimal policy
+        under the KL constraint is $\pi_\theta$ itself.
+      </p>
+      <p>
+        The implicit reward is given by $r(x, y) = \beta \log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)} + \beta \log Z(x)$.
+      </p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Why DPO Works</div>
+      <p>
+        The DPO loss has an intuitive interpretation. Consider the log-ratio
+        $\log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$: it is positive
+        when the policy assigns higher probability to response $y$ than the reference
+        model does, and negative otherwise. The DPO loss increases this ratio for
+        preferred responses $y_w$ and decreases it for dispreferred responses $y_l$.
+      </p>
+      <p>
+        In effect, DPO performs a form of <em>contrastive learning</em> on the policy:
+        it pushes up the probability of winning responses relative to the reference,
+        while pushing down the probability of losing responses. The sigmoid ensures
+        that the gradient is strongest when the model's implicit ranking disagrees
+        with the human preference, and weakest when they already agree.
+      </p>
+    </div>
+
+    <h3 id="dpo-advantages">Practical Advantages of DPO</h3>
+
+    <p>
+      DPO offers several practical advantages over the full RLHF pipeline:
+    </p>
+
+    <ul>
+      <li>
+        <strong>Simplicity.</strong> No separate reward model needs to be trained or maintained.
+        The policy itself implicitly defines a reward function.
+      </li>
+      <li>
+        <strong>Stability.</strong> There is no RL optimization loop with its attendant
+        instabilities&mdash;no value function fitting, no advantage estimation, no clipping
+        ratios. DPO is a single supervised loss.
+      </li>
+      <li>
+        <strong>Efficiency.</strong> The entire training procedure is a standard
+        cross-entropy-style optimization on the preference dataset, leveraging the same
+        infrastructure used for language model pre-training.
+      </li>
+    </ul>
+
+    <p>
+      Empirically, DPO achieves competitive or superior performance to PPO-based RLHF on
+      a range of tasks. Experiments on sentiment control using GPT-2 showed that DPO
+      achieves a better trade-off between reward and KL divergence compared to PPO. At
+      larger scale, DPO has been adopted in the training of models such as Mistral and
+      LLaMA 3, demonstrating its viability for production-scale alignment.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 8: LLM Alignment Example                       -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="llm-alignment">Putting It Together: LLM Alignment</h2>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Aligning a Language Model</div>
+      <p>
+        Consider the task of making a language model produce helpful, accurate summaries
+        of news articles. The full alignment workflow proceeds as follows:
+      </p>
+      <ol>
+        <li>
+          <strong>Pretrain</strong> a large language model on a broad corpus (web text,
+          books, code) to acquire general language competence.
+        </li>
+        <li>
+          <strong>Supervised fine-tuning:</strong> further train the model on a curated
+          dataset of (article, human-written summary) pairs to teach the format and style
+          of good summaries.
+        </li>
+        <li>
+          <strong>Preference collection:</strong> for each article, generate two candidate
+          summaries from the SFT model. Present both to a human annotator who selects
+          the better summary (or marks a tie).
+        </li>
+        <li>
+          <strong>Alignment training:</strong> use either RLHF (train a reward model, then
+          optimize with PPO + KL penalty) or DPO (directly optimize the policy on the
+          preference pairs) to steer the model toward producing summaries humans prefer.
+        </li>
+      </ol>
+      <p>
+        Stiennon et al. (2020) showed that RLHF-trained summarization models were
+        significantly preferred by human evaluators over both the SFT baseline and
+        models trained with larger datasets but no preference optimization. The same
+        paradigm powers the alignment of general-purpose assistants like ChatGPT.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 9: Summary                                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="summary">Summary</h2>
+
+    <p>
+      This lecture explored how agents can learn from human guidance rather than from
+      explicit reward functions, tracing a path from imitation learning to modern LLM
+      alignment. The key ideas are:
+    </p>
+
+    <ul>
+      <li>
+        <strong>Behavioral cloning</strong> applies supervised learning to expert
+        demonstrations but suffers from compounding errors due to distribution shift,
+        with total error scaling as $O(\epsilon T^2)$.
+      </li>
+      <li>
+        <strong>DAgger</strong> addresses distribution shift by iteratively collecting
+        expert labels on the learner's own visited states, reducing the error scaling to
+        $O(\epsilon T)$, but requires interactive expert access.
+      </li>
+      <li>
+        <strong>Reward learning from preferences</strong> uses the Bradley-Terry model
+        to convert pairwise human comparisons into a learned reward function:
+        $P(\tau^1 \succ \tau^2) = \sigma(R(\tau^1) - R(\tau^2))$.
+      </li>
+      <li>
+        <strong>RLHF</strong> combines supervised fine-tuning, a learned reward model,
+        and KL-constrained RL optimization to align language models with human preferences.
+        The KL penalty $\beta\, D_{\text{KL}}(\pi_\theta \| \pi_{\text{ref}})$ prevents
+        reward over-optimization.
+      </li>
+      <li>
+        <strong>DPO</strong> eliminates the explicit reward model and RL loop by
+        reparameterizing the RLHF objective into a supervised loss on preference pairs,
+        achieving equivalent results with greater simplicity and stability.
+      </li>
+    </ul>
+
+    <p>
+      The progression from behavioral cloning through DAgger to RLHF and DPO illustrates
+      a central theme: as we move to weaker forms of human supervision (from full demonstrations
+      to pairwise preferences), we need more sophisticated algorithms to extract a useful
+      training signal. These methods have become foundational in modern AI, powering the
+      alignment of the large language models that underpin today's conversational AI systems.
+    </p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture07.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">PPO, GAE &amp; Imitation Learning</span>
+    </a>
+    <a class="next" href="lecture09.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Exploration &amp; Bandits</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

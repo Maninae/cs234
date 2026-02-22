@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 3: Model-Free Policy Evaluation — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 3</div>
+    <h2>Model-Free Policy Evaluation</h2>
+    <p class="lecture-desc">Estimating value functions without a model using Monte Carlo and Temporal Difference methods.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Monte Carlo</span>
+      <span class="lecture-tag">TD Learning</span>
+      <span class="lecture-tag">Bias-Variance</span>
+      <span class="lecture-tag">Batch Methods</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture3pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <h2 id="motivation">Why Model-Free Evaluation?</h2>
+
+    <p>
+      In the previous lecture, we saw how to evaluate a policy $\pi$ when we have complete knowledge of the MDP's dynamics $P(s' \mid s, a)$ and reward function $R(s, a)$. Dynamic programming gave us a clean iterative solution: apply the Bellman operator repeatedly until convergence. But in most real-world problems, we do not have access to those models. A hospital does not know the precise transition probabilities governing patient outcomes, and a robotics engineer cannot write down the exact physics of every contact interaction. In these settings, we need methods that can estimate a policy's value <strong>directly from experience</strong>&mdash;trajectories of states, actions, and rewards collected by executing the policy in the environment.
+    </p>
+
+    <p>
+      This lecture introduces three families of model-free policy evaluation methods: <strong>Monte Carlo (MC)</strong> estimation, <strong>Temporal Difference (TD)</strong> learning, and the <strong>certainty-equivalence</strong> (model-based-from-data) approach. We will study their algorithms, analyze their statistical properties&mdash;bias, variance, consistency&mdash;and compare what they converge to when given a fixed batch of data.
+    </p>
+
+    <h2 id="background">Background: Value Functions and Returns</h2>
+
+    <p>
+      Before diving into model-free methods, let us recall the quantities we want to estimate. All of the definitions below assume a policy $\pi$ is being followed inside an MDP.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Return</div>
+      <p>
+        The <strong>return</strong> $G_t$ from time step $t$ is the discounted sum of future rewards:
+      </p>
+      <p>$$G_t = r_t + \gamma\, r_{t+1} + \gamma^2 r_{t+2} + \gamma^3 r_{t+3} + \cdots$$</p>
+      <p>where $\gamma \in [0, 1)$ is the discount factor.</p>
+    </div>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; State Value Function</div>
+      <p>
+        The <strong>state value function</strong> $V^\pi(s)$ is the expected return when starting in state $s$ and following policy $\pi$ thereafter:
+      </p>
+      <p>$$V^\pi(s) = \mathbb{E}_\pi\!\left[\, G_t \mid s_t = s \,\right] = \mathbb{E}_\pi\!\left[\, r_t + \gamma\, r_{t+1} + \gamma^2 r_{t+2} + \cdots \mid s_t = s \,\right]$$</p>
+    </div>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Action Value Function</div>
+      <p>
+        The <strong>action value function</strong> $Q^\pi(s, a)$ is the expected return when starting in state $s$, taking action $a$, and then following $\pi$:
+      </p>
+      <p>$$Q^\pi(s, a) = \mathbb{E}_\pi\!\left[\, G_t \mid s_t = s,\, a_t = a \,\right]$$</p>
+    </div>
+
+    <p>
+      When the dynamics and rewards are known, the Bellman equation lets us compute $V^\pi$ via dynamic programming:
+    </p>
+    <p>
+      $$V^\pi_k(s) = R(s, \pi(s)) + \gamma \sum_{s' \in \mathcal{S}} P(s' \mid s, \pi(s))\, V^\pi_{k-1}(s')$$
+    </p>
+    <p>
+      The key idea in that equation is <strong>bootstrapping</strong>: we substitute our current estimate $V^\pi_{k-1}(s')$ for the true future expected return. This idea will reappear in TD learning, but applied to sampled transitions rather than full sweeps over the state space.
+    </p>
+
+    <h2 id="monte-carlo">Monte Carlo Policy Evaluation</h2>
+
+    <p>
+      The simplest model-free approach is to take the definition of $V^\pi(s)$ literally. Since $V^\pi(s) = \mathbb{E}_\pi[G_t \mid s_t = s]$, we can estimate this expectation by its <strong>sample mean</strong>: generate many trajectories under $\pi$, compute the return from every visit to state $s$, and average them.
+    </p>
+
+    <p>
+      Monte Carlo methods have several attractive properties. They do not require knowledge of the MDP dynamics or rewards. They do not even require the Markov property&mdash;the estimator is valid for any stochastic process. The price is that we must wait until an episode terminates before we can compute the return $G_t$, so MC is restricted to <strong>episodic</strong> settings where every trajectory eventually ends.
+    </p>
+
+    <h3 id="first-visit-mc">First-Visit Monte Carlo</h3>
+
+    <p>
+      In first-visit MC, we only use the <em>first</em> time a state $s$ is encountered within each episode. If the agent visits $s$ at time steps 2, 7, and 15 in one episode, only the return $G_2$ from the first visit contributes to the estimate. This restriction ensures the samples are independent across episodes, which yields a clean unbiasedness guarantee.
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: First-Visit Monte Carlo Policy Evaluation</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $N(s) = 0$ and $G_{\text{total}}(s) = 0$ for all $s \in \mathcal{S}$.</li>
+        <li><span class="keyword">Loop</span> (for each episode $i$):
+          <ol type="a">
+            <li>Sample episode $i$: $s_{i,1}, a_{i,1}, r_{i,1}, s_{i,2}, a_{i,2}, r_{i,2}, \ldots, s_{i,T_i}, a_{i,T_i}, r_{i,T_i}$.</li>
+            <li>Compute return: $G_{i,t} = r_{i,t} + \gamma\, r_{i,t+1} + \gamma^2 r_{i,t+2} + \cdots + \gamma^{T_i - t}\, r_{i,T_i}$.</li>
+            <li><span class="keyword">For</span> each time step $t = 1, \ldots, T_i$:
+              <ol type="i">
+                <li><span class="keyword">If</span> $s_{i,t}$ has not been visited earlier in episode $i$:</li>
+                <li>$N(s_{i,t}) \leftarrow N(s_{i,t}) + 1$</li>
+                <li>$G_{\text{total}}(s_{i,t}) \leftarrow G_{\text{total}}(s_{i,t}) + G_{i,t}$</li>
+                <li>$V^\pi(s_{i,t}) \leftarrow G_{\text{total}}(s_{i,t})\, /\, N(s_{i,t})$</li>
+              </ol>
+            </li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <h3 id="every-visit-mc">Every-Visit Monte Carlo</h3>
+
+    <p>
+      Every-visit MC uses <em>all</em> visits to state $s$ within each episode, not just the first. The algorithm is identical to the one above, except the conditional "if this is the first visit" is removed&mdash;we always update. The samples within a single episode are no longer independent (because later visits overlap with earlier returns), which makes the estimator <strong>biased</strong> for a finite number of episodes. However, it is still a <strong>consistent</strong> estimator: the bias vanishes as the number of episodes grows. In practice, every-visit MC often achieves lower mean squared error (MSE) than first-visit MC because it makes more efficient use of each episode.
+    </p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Mars Rover MC Evaluation</div>
+      <p>
+        Consider a Mars rover MDP with seven states $s_1, \ldots, s_7$ and reward vector $R(s) = [-1, 0, 0, 0, 0, 0, +10]$. Suppose the policy always takes action $a_1$, and we observe the trajectory:
+      </p>
+      <p>$$(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, -1,\; \text{terminal})$$</p>
+      <p>
+        With discount $\gamma < 1$, the first-visit MC estimate of $V^\pi(s_2)$ uses only the return from the <em>first</em> visit at time step 2: $G_2 = 0 + \gamma \cdot 0 + \gamma^2 \cdot (-1) = -\gamma^2$. The every-visit estimate additionally incorporates the return from the second visit at time step 3: $G_3 = 0 + \gamma \cdot (-1) = -\gamma$. The every-visit estimate of $V^\pi(s_2)$ is $(-\gamma^2 + (-\gamma)) / 2$.
+      </p>
+    </div>
+
+    <h3 id="incremental-mc">Incremental Monte Carlo Updates</h3>
+
+    <p>
+      Maintaining running sums and counts is mathematically equivalent to performing an <strong>incremental update</strong> after each episode. Writing $N(s)$ for the updated visit count, the running-average update is:
+    </p>
+
+    <p>$$V^\pi(s) \leftarrow V^\pi(s) + \frac{1}{N(s)}\Big(G_{i,t} - V^\pi(s)\Big)$$</p>
+
+    <p>
+      More generally, we can replace $1/N(s)$ with a fixed or decaying learning rate $\alpha$, giving us the general form:
+    </p>
+
+    <p>$$V^\pi(s_t) \leftarrow V^\pi(s_t) + \alpha\,\Big(G_{i,t} - V^\pi(s_t)\Big)$$</p>
+
+    <p>
+      This "error-correction" pattern&mdash;<em>update the old estimate by a step size times the difference between a target and the old estimate</em>&mdash;is fundamental. It will appear again in TD learning, SARSA, Q-learning, and many other algorithms throughout the course. The quantity $G_{i,t} - V^\pi(s_t)$ is the <strong>MC error</strong>: how far the observed return was from our current prediction.
+    </p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Convergence of Incremental MC</div>
+      <p>
+        If the learning rate schedule $\{\alpha_n(s)\}$ satisfies the Robbins-Monro conditions:
+      </p>
+      <p>$$\sum_{n=1}^{\infty} \alpha_n(s) = \infty \qquad \text{and} \qquad \sum_{n=1}^{\infty} \alpha_n^2(s) < \infty$$</p>
+      <p>
+        then incremental Monte Carlo converges to the true value $V^\pi(s)$ for all $s$. The first condition ensures the step sizes are large enough to overcome any initial bias; the second ensures they shrink fast enough for the variance to vanish. A common choice satisfying both is $\alpha_n = 1/n$.
+      </p>
+    </div>
+
+    <h3 id="mc-limitations">Limitations of Monte Carlo Methods</h3>
+
+    <p>
+      Monte Carlo estimators are generally <strong>high variance</strong>. The return $G_t$ is a sum of many random variables (each transition and reward along the trajectory), and the variance of that sum can be substantial. Reducing the variance to an acceptable level may require a large number of episodes, which is problematic when data is expensive (clinical trials, physical robot experiments, high-stakes financial decisions).
+    </p>
+    <p>
+      Additionally, MC requires episodes to terminate. In continuing (non-episodic) tasks&mdash;a server managing requests indefinitely, a thermostat regulating temperature around the clock&mdash;there is no natural episode boundary, so pure MC cannot be applied.
+    </p>
+
+    <h2 id="td-learning">Temporal Difference Learning</h2>
+
+    <p>
+      Temporal Difference learning addresses both limitations of MC. As Sutton and Barto write, "If one had to identify one idea as central and novel to reinforcement learning, it would undoubtedly be temporal-difference learning." TD combines the sampling idea from Monte Carlo with the bootstrapping idea from dynamic programming, producing an algorithm that updates after every single transition and works in non-episodic settings.
+    </p>
+
+    <h3 id="td0">TD(0): The One-Step TD Algorithm</h3>
+
+    <p>
+      In Monte Carlo, the target for our update is the full return $G_{i,t}$. In TD(0), we replace the full return with a one-step estimate: we observe the immediate reward $r_t$ and the next state $s_{t+1}$, and <em>bootstrap</em> by plugging in our current estimate $V^\pi(s_{t+1})$ for the remaining future return. The update rule is:
+    </p>
+
+    <p>$$V^\pi(s_t) \leftarrow V^\pi(s_t) + \alpha\,\Big[\underbrace{r_t + \gamma\, V^\pi(s_{t+1})}_{\text{TD target}} - V^\pi(s_t)\Big]$$</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; TD Target and TD Error</div>
+      <p>
+        The <strong>TD target</strong> is the quantity $r_t + \gamma\, V^\pi(s_{t+1})$. It serves as a one-step sample-based approximation to the return $G_t$.
+      </p>
+      <p>
+        The <strong>TD error</strong> (also called the temporal difference) is:
+      </p>
+      <p>$$\delta_t = r_t + \gamma\, V^\pi(s_{t+1}) - V^\pi(s_t)$$</p>
+      <p>
+        It measures how much our value estimate must be corrected after observing a single transition.
+      </p>
+    </div>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: TD(0) Policy Evaluation</div>
+      <ol>
+        <li><span class="keyword">Input:</span> learning rate $\alpha$, policy $\pi$, discount factor $\gamma$.</li>
+        <li><span class="keyword">Initialize</span> $V^\pi(s) = 0$ for all $s \in \mathcal{S}$.</li>
+        <li><span class="keyword">Loop</span> (for each time step):
+          <ol type="a">
+            <li>Observe current state $s_t$, take action $a_t \sim \pi(s_t)$, receive reward $r_t$, observe next state $s_{t+1}$.</li>
+            <li>$V^\pi(s_t) \leftarrow V^\pi(s_t) + \alpha\,\big[r_t + \gamma\, V^\pi(s_{t+1}) - V^\pi(s_t)\big]$</li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <p>
+      Notice how little data each update requires: just a single transition tuple $(s_t, a_t, r_t, s_{t+1})$. There is no need to wait for an episode to end. This makes TD(0) applicable to continuing tasks with no terminal state, and it allows the agent to learn online, refining its estimates after every step.
+    </p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Mars Rover TD(0) Evaluation</div>
+      <p>
+        Using the same Mars rover MDP with $R(s) = [-1, 0, 0, 0, 0, 0, +10]$ and trajectory $(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, -1,\; \text{terminal})$, suppose $\gamma = 1$ and $\alpha = 1$ (for simplicity), with all values initialized to zero.
+      </p>
+      <p>
+        The TD updates proceed one transition at a time, right-to-left in the trajectory. After the transition $(s_1, a_1, -1, \text{terminal})$, we get $V(s_1) \leftarrow 0 + 1 \cdot [-1 + 1 \cdot 0 - 0] = -1$. Working backwards through $(s_2, a_1, 0, s_1)$ after $V(s_1)$ has been updated gives $V(s_2) \leftarrow 0 + 1 \cdot [0 + 1 \cdot (-1) - 0] = -1$. But note: TD processes tuples in the <em>order they occur</em>. The first update is $(s_3 \to s_2)$, which gives $V(s_3) \leftarrow 0 + 1 \cdot [0 + 0 - 0] = 0$ since $V(s_2) = 0$ at that point. Information propagates slowly&mdash;one step per update&mdash;unlike MC, which propagates the entire return immediately.
+      </p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Insight &mdash; Bootstrapping</div>
+      <p>
+        The central idea in TD learning is <strong>bootstrapping</strong>: using the agent's own current estimate $V^\pi(s_{t+1})$ as a stand-in for the true expected future return. In dynamic programming, bootstrapping is exact because we sum over all possible next states weighted by their true probabilities. In TD, we combine bootstrapping with <em>sampling</em>&mdash;we see only one next state $s_{t+1}$, drawn from the actual environment. This marriage of sampling and bootstrapping is what makes TD uniquely powerful.
+      </p>
+    </div>
+
+    <h2 id="bias-variance">Bias-Variance Tradeoff: MC vs. TD</h2>
+
+    <p>
+      Monte Carlo and TD represent two ends of a spectrum, and their relative strengths are best understood through the lens of <strong>bias and variance</strong>.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Bias, Variance, and MSE</div>
+      <p>
+        For an estimator $\hat{\theta}$ of a parameter $\theta$:
+      </p>
+      <p>
+        <strong>Bias:</strong> $\text{Bias}_\theta(\hat{\theta}) = \mathbb{E}_{x \mid \theta}[\hat{\theta}] - \theta$
+      </p>
+      <p>
+        <strong>Variance:</strong> $\text{Var}(\hat{\theta}) = \mathbb{E}_{x \mid \theta}\!\left[(\hat{\theta} - \mathbb{E}[\hat{\theta}])^2\right]$
+      </p>
+      <p>
+        <strong>Mean Squared Error:</strong> $\text{MSE}(\hat{\theta}) = \text{Var}(\hat{\theta}) + \text{Bias}_\theta(\hat{\theta})^2$
+      </p>
+      <p>
+        An estimator is <strong>consistent</strong> if $\lim_{n \to \infty} \Pr(|\hat{\theta}_n - \theta| > \epsilon) = 0$ for all $\epsilon > 0$.
+      </p>
+    </div>
+
+    <h4>Monte Carlo: unbiased, high variance</h4>
+    <p>
+      First-visit MC uses the actual sampled return $G_t$ as its target. Since $\mathbb{E}_\pi[G_t \mid s_t = s] = V^\pi(s)$ by definition, the target is an <strong>unbiased</strong> estimate of the true value. However, $G_t$ depends on a long chain of random transitions and rewards. Each additional random step increases the variance of $G_t$, making MC a high-variance estimator&mdash;especially in long episodes or stochastic environments.
+    </p>
+
+    <h4>TD(0): biased, lower variance</h4>
+    <p>
+      TD(0) uses the target $r_t + \gamma V^\pi(s_{t+1})$. Because the current estimate $V^\pi(s_{t+1})$ is generally not equal to the true $V^\pi(s_{t+1})$, the TD target is a <strong>biased</strong> estimate of $V^\pi(s_t)$. Early on, the bias can be substantial&mdash;it is heavily influenced by the initialization of the value table. However, the TD target depends on only <em>one</em> random transition (from $s_t$ to $s_{t+1}$), so its variance is much lower than the full-return target used by MC.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-label">Insight &mdash; The Bias-Variance Spectrum</div>
+      <p>
+        Think of MC and TD(0) as occupying opposite ends of a bias-variance spectrum. MC has zero bias but high variance because it uses the full (noisy) return. TD(0) has low variance but nonzero bias because it substitutes an imperfect estimate for the tail of the return. As the value estimates improve over time, TD's bias decreases, and under appropriate learning-rate conditions both methods converge to the same true value $V^\pi$. In practice, TD's lower variance often means it learns a usable estimate <em>faster</em> than MC, even though each individual TD update carries some bias.
+      </p>
+    </div>
+
+    <p>
+      TD(0) is also a <strong>consistent</strong> estimator under the same Robbins-Monro learning rate conditions required for incremental MC ($\sum \alpha_n = \infty$, $\sum \alpha_n^2 < \infty$). Additionally, TD exploits the <strong>Markov property</strong>: by bootstrapping from $V^\pi(s_{t+1})$, it implicitly leverages the fact that the future is conditionally independent of the past given the present state. MC does not rely on this property, which means MC can be applied to non-Markov environments where TD cannot.
+    </p>
+
+    <h2 id="n-step-td-lambda">Interpolating MC and TD: $n$-Step Returns and TD($\lambda$)</h2>
+
+    <p>
+      Since MC (using the full return) and TD(0) (using a 1-step return) sit at opposite ends of the bias-variance spectrum, a natural question arises: can we interpolate between them? The answer is yes, and there are two elegant ways to do so.
+    </p>
+
+    <h3 id="n-step">$n$-Step Returns</h3>
+
+    <p>
+      Instead of bootstrapping after exactly one step, we can take $n$ real steps and then bootstrap:
+    </p>
+    <p>$$G_t^{(n)} = r_t + \gamma\, r_{t+1} + \gamma^2 r_{t+2} + \cdots + \gamma^{n-1} r_{t+n-1} + \gamma^n V^\pi(s_{t+n})$$</p>
+    <p>
+      When $n = 1$, this recovers the TD(0) target. When $n = \infty$ (or $n$ reaches the episode end), this recovers the full MC return. Intermediate values of $n$ trade off between the low variance of short bootstraps and the low bias of long rollouts. The update rule is:
+    </p>
+    <p>$$V^\pi(s_t) \leftarrow V^\pi(s_t) + \alpha\,\big[G_t^{(n)} - V^\pi(s_t)\big]$$</p>
+
+    <h3 id="td-lambda">TD($\lambda$) and Eligibility Traces</h3>
+
+    <p>
+      Rather than committing to a single value of $n$, TD($\lambda$) takes a <strong>geometrically weighted average</strong> over all $n$-step returns. The parameter $\lambda \in [0, 1]$ controls the weighting:
+    </p>
+    <p>$$G_t^\lambda = (1 - \lambda) \sum_{n=1}^{\infty} \lambda^{n-1}\, G_t^{(n)}$$</p>
+    <p>
+      When $\lambda = 0$, only the 1-step return survives, recovering TD(0). When $\lambda = 1$, the weights decay so slowly that the full Monte Carlo return dominates. Values between 0 and 1 blend the short-horizon and long-horizon returns smoothly.
+    </p>
+
+    <p>
+      The practical implementation of TD($\lambda$) uses <strong>eligibility traces</strong>&mdash;a memory variable $e_t(s)$ maintained for each state that records how recently and frequently the state has been visited. When a TD error $\delta_t$ is observed, all states are updated in proportion to their eligibility:
+    </p>
+    <p>$$e_t(s) = \gamma \lambda\, e_{t-1}(s) + \mathbf{1}(s_t = s)$$</p>
+    <p>$$V^\pi(s) \leftarrow V^\pi(s) + \alpha\, \delta_t\, e_t(s) \quad \text{for all } s$$</p>
+    <p>
+      Eligibility traces provide an efficient, online mechanism for propagating TD errors backward through time without storing entire trajectories. They unify the forward view (which $n$-step return are we targeting?) with the backward view (how do we distribute credit to past states?).
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-label">Insight &mdash; The $\lambda$ Continuum</div>
+      <p>
+        The parameter $\lambda$ provides a smooth knob between fully model-free, high-variance Monte Carlo ($\lambda = 1$) and low-variance, bootstrapped TD(0) ($\lambda = 0$). In practice, intermediate values like $\lambda = 0.8$ or $\lambda = 0.9$ often yield the best empirical performance, capturing the benefits of both approaches.
+      </p>
+    </div>
+
+    <h2 id="certainty-equivalence">Certainty Equivalence: A Model-Based Approach from Data</h2>
+
+    <p>
+      There is a third strategy that does not fit neatly into the "model-free" category but is worth understanding as a baseline. Instead of directly estimating $V^\pi$, we can first <strong>estimate the MDP model</strong> from data and then apply dynamic programming to the estimated model.
+    </p>
+
+    <p>
+      After observing a collection of transitions $(s_k, a_k, r_k, s_{k+1})$, we compute maximum likelihood estimates of the transition probabilities and rewards:
+    </p>
+    <p>$$\hat{P}(s' \mid s, a) = \frac{\sum_{k} \mathbf{1}(s_k = s,\; a_k = a,\; s_{k+1} = s')}{\sum_{k} \mathbf{1}(s_k = s,\; a_k = a)}$$</p>
+    <p>$$\hat{R}(s, a) = \frac{\sum_{k} \mathbf{1}(s_k = s,\; a_k = a)\, r_k}{\sum_{k} \mathbf{1}(s_k = s,\; a_k = a)}$$</p>
+    <p>
+      We then treat this estimated MDP as if it were the true model (hence "certainty equivalence") and solve for $V^\pi$ using any DP method from Lecture 2.
+    </p>
+
+    <p>
+      This approach is <strong>very data-efficient</strong>&mdash;it squeezes maximum information out of each transition&mdash;but <strong>computationally expensive</strong>. Recomputing the MDP solution after each new data point costs $O(|\mathcal{S}|^3)$ for the matrix-inverse solution or $O(|\mathcal{S}|^2 |\mathcal{A}|)$ for iterative methods. It is a consistent estimator when the underlying process is truly Markov and it naturally supports off-policy evaluation since the model can be built from any data source.
+    </p>
+
+    <h2 id="batch-methods">Batch Methods: What MC and TD Converge To</h2>
+
+    <p>
+      When given a <strong>fixed, finite dataset</strong> of episodes, we can repeatedly cycle through the data and apply MC or TD updates until convergence. This "batch" or offline setting reveals a subtle but important difference between the two methods.
+    </p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; The AB Problem (Sutton &amp; Barto, Example 6.4)</div>
+      <p>
+        Consider two states $A$ and $B$ with $\gamma = 1$. We observe eight episodes of experience:
+      </p>
+      <ul>
+        <li>$A, 0, B, 0$ (one episode)</li>
+        <li>$B, 1$ (six episodes)</li>
+        <li>$B, 0$ (one episode)</li>
+      </ul>
+      <p>
+        Both MC and TD agree that $V(B) = 6/8 = 0.75$ (the average reward from $B$).
+      </p>
+      <p>
+        But what about $V(A)$? State $A$ was visited once, and the observed return from that episode was $0 + 0 = 0$. <strong>Batch MC</strong> converges to $V(A) = 0$&mdash;the average observed return from $A$. <strong>Batch TD</strong> converges to $V(A) = 0.75$&mdash;because it learns $V(A) = 0 + \gamma \cdot V(B) = 0.75$, exploiting the Markov structure: every time $A$ was observed, it transitioned to $B$.
+      </p>
+    </div>
+
+    <p>
+      This example crystallizes the difference. Batch MC minimizes the mean squared error between predictions and observed returns, without assuming any structure. Batch TD finds the value function consistent with the <strong>maximum likelihood MDP model</strong> implied by the data&mdash;exactly the certainty-equivalence solution. When the Markov assumption holds, TD's answer is statistically more efficient (lower MSE for small datasets) because it leverages the factored structure of the MDP. When the Markov assumption is violated, MC may be more robust.
+    </p>
+
+    <h2 id="comparison">Comparing the Three Approaches</h2>
+
+    <p>
+      We can now summarize the tradeoffs across the methods introduced in this lecture along several dimensions that matter for practical algorithm selection.
+    </p>
+
+    <h4>Consistency</h4>
+    <p>
+      All three approaches&mdash;MC, TD, and certainty equivalence&mdash;converge to the true $V^\pi$ given sufficient data and appropriate learning rates (for the incremental versions). First-visit MC and the certainty-equivalence approach are unbiased; every-visit MC and TD(0) are biased but consistent.
+    </p>
+
+    <h4>Computational cost</h4>
+    <p>
+      Incremental MC and TD(0) both update in $O(1)$ per transition per state. Certainty equivalence requires solving a system of $|\mathcal{S}|$ equations, costing $O(|\mathcal{S}|^2)$ to $O(|\mathcal{S}|^3)$ per model update.
+    </p>
+
+    <h4>Data efficiency</h4>
+    <p>
+      Certainty equivalence is the most data-efficient (it extracts a full model from the data). TD is generally more data-efficient than MC in Markov environments because bootstrapping lets information propagate faster. MC can be more efficient in non-Markov environments where the bootstrapping assumption is violated.
+    </p>
+
+    <h4>Applicability</h4>
+    <p>
+      MC requires episodic tasks. TD and certainty equivalence work in both episodic and continuing settings. MC does not require the Markov property; TD and certainty equivalence do.
+    </p>
+
+    <h2 id="summary">Summary</h2>
+
+    <p>
+      This lecture established the foundations of model-free policy evaluation. We introduced <strong>Monte Carlo</strong> methods, which estimate $V^\pi(s)$ by averaging sampled returns&mdash;a simple, unbiased approach that requires complete episodes and can suffer from high variance. We then introduced <strong>Temporal Difference learning</strong>, which bootstraps from its own value estimates to update after every single transition&mdash;a lower-variance but biased approach that does not require episodes to terminate. The $n$-step return and TD($\lambda$) frameworks provide a principled continuum between these extremes, controlled by a single parameter. Finally, the <strong>certainty-equivalence</strong> approach estimates an MDP model from data and solves it exactly, trading computational cost for maximum data efficiency.
+    </p>
+
+    <p>
+      All of these methods address the <strong>prediction</strong> problem: estimating the value of a given, fixed policy $\pi$. In the next lecture, we turn to the <strong>control</strong> problem: how to use these evaluation tools to find a <em>better</em> policy, still without access to the true MDP model.
+    </p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture02.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Tabular MDP Planning</span>
+    </a>
+    <a class="next" href="lecture04.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Model-Free Control</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\E': '\\mathbb{E}','\\R': '\\mathbb{R}','\\Vpi': 'V^{\\pi}','\\Qpi': 'Q^{\\pi}','\\Vstar': 'V^{*}','\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

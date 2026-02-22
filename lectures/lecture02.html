@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 2: Tabular MDP Planning — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer">
+    <a href="../index.html">&larr; All Modules</a>
+  </div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 2</div>
+    <h2>Tabular MDP Planning</h2>
+    <p class="lecture-desc">Formalizing sequential decision-making with Markov Decision Processes and solving them with dynamic programming.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">MDP</span>
+      <span class="lecture-tag">Bellman Equations</span>
+      <span class="lecture-tag">Dynamic Programming</span>
+      <span class="lecture-tag">Policy Iteration</span>
+      <span class="lecture-tag">Value Iteration</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture2pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 1: Review — Markov Reward Processes            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="mrp-review">Review: Markov Reward Processes</h2>
+
+    <p>
+      Before introducing decisions and actions, we first consolidate the machinery for
+      <strong>Markov Reward Processes (MRPs)</strong> introduced at the end of Lecture 1.
+      An MRP models an environment where an agent passively receives rewards as it
+      transitions between states according to fixed dynamics&mdash;there are no choices to make.
+      Although limited, MRPs are the foundation on which the full decision-making framework
+      of MDPs is built.
+    </p>
+
+    <h3 id="mrp-return-value">Return and Value Function</h3>
+
+    <p>
+      The <strong>horizon</strong> $H$ is the number of time steps in each episode. It may be
+      finite or infinite. The <strong>return</strong> $G_t$ is the discounted sum of rewards
+      received from time step $t$ onward:
+    </p>
+
+    $$G_t = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots + \gamma^{H-1} r_{t+H-1}$$
+
+    <p>
+      The <strong>state value function</strong> $V(s)$ for an MRP is the expected return
+      starting from state $s$:
+    </p>
+
+    $$V(s) = \mathbb{E}[G_t \mid s_t = s] = \mathbb{E}\!\left[r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots + \gamma^{H-1} r_{t+H-1} \mid s_t = s\right]$$
+
+    <h3 id="mrp-bellman">Bellman Equation for MRPs</h3>
+
+    <p>
+      The Markov property grants us a powerful recursive decomposition. The value of a
+      state can be split into the <em>immediate reward</em> plus the <em>discounted value
+      of successor states</em>:
+    </p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Bellman Equation (MRP)</div>
+      <p>For every state $s \in S$:</p>
+      $$V(s) = R(s) + \gamma \sum_{s' \in S} P(s' \mid s)\, V(s')$$
+      <p>
+        The first term $R(s)$ captures the immediate reward; the second term captures
+        the expected discounted future reward, weighted by the transition probabilities.
+      </p>
+    </div>
+
+    <h3 id="mrp-matrix">Matrix Form and Analytic Solution</h3>
+
+    <p>
+      For a finite-state MRP with $N = |S|$ states, the Bellman equation can be written in
+      matrix form. Let $\mathbf{V}$ be the column vector of state values, $\mathbf{R}$ the
+      column vector of rewards, and $\mathbf{P}$ the $N \times N$ transition matrix. Then:
+    </p>
+
+    $$\mathbf{V} = \mathbf{R} + \gamma \mathbf{P} \mathbf{V}$$
+
+    <p>Rearranging yields a closed-form solution:</p>
+
+    $$(\mathbf{I} - \gamma \mathbf{P})\,\mathbf{V} = \mathbf{R} \quad\Longrightarrow\quad \mathbf{V} = (\mathbf{I} - \gamma \mathbf{P})^{-1}\,\mathbf{R}$$
+
+    <p>
+      This direct solve requires inverting an $N \times N$ matrix, costing $O(N^3)$. For
+      large state spaces this is prohibitive, motivating iterative methods.
+    </p>
+
+    <h3 id="mrp-iterative">Iterative Algorithm for MRP Value Computation</h3>
+
+    <p>
+      Dynamic programming provides a scalable alternative. We initialize all values to zero
+      and repeatedly apply the Bellman equation as an update rule until convergence:
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Iterative Policy Evaluation for MRP</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $V_0(s) = 0$ for all $s \in S$</li>
+        <li><span class="keyword">For</span> $k = 1, 2, \ldots$ until convergence:</li>
+        <li style="list-style: none; padding-left: 20px;">
+          <span class="keyword">For all</span> $s \in S$:
+          $$V_k(s) = R(s) + \gamma \sum_{s' \in S} P(s' \mid s)\, V_{k-1}(s')$$
+        </li>
+      </ol>
+      <p class="comment">Computational cost: $O(|S|^2)$ per iteration.</p>
+    </div>
+
+    <p>
+      Each iteration applies one "Bellman backup" across all states, pulling value
+      information one step further back in time. This procedure converges to the true
+      value function $V$ when $\gamma &lt; 1$ or when the process terminates with
+      probability 1.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 2: Markov Decision Processes                   -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="mdp-definition">Markov Decision Processes</h2>
+
+    <p>
+      A <strong>Markov Decision Process</strong> extends the MRP by introducing
+      <em>actions</em>&mdash;the agent now <em>chooses</em> what to do in each state, and both
+      the transitions and rewards may depend on that choice. MDPs are the standard
+      mathematical framework for sequential decision-making under uncertainty.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Markov Decision Process</div>
+      <p>An MDP is a tuple $(S, A, P, R, \gamma)$ where:</p>
+      <ul>
+        <li>$S$ is a finite set of <strong>states</strong></li>
+        <li>$A$ is a finite set of <strong>actions</strong></li>
+        <li>$P$ is the <strong>transition model</strong>: $P(s_{t+1} = s' \mid s_t = s,\, a_t = a)$ gives the probability of reaching state $s'$ after taking action $a$ in state $s$</li>
+        <li>$R$ is the <strong>reward function</strong>: $R(s, a) = \mathbb{E}[r_t \mid s_t = s,\, a_t = a]$</li>
+        <li>$\gamma \in [0, 1]$ is the <strong>discount factor</strong></li>
+      </ul>
+      <p>
+        Note: the reward function is sometimes defined as a function of state alone,
+        or of the $(s, a, s')$ tuple. In this course we primarily use $R(s, a)$.
+      </p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>
+        A <strong>large</strong> discount factor $\gamma$ (close to 1) means the agent
+        cares about <em>long-term</em> rewards almost as much as immediate ones. A
+        <strong>small</strong> $\gamma$ (close to 0) makes the agent myopic, heavily
+        prioritizing short-term payoffs.
+      </p>
+    </div>
+
+    <h3 id="mars-rover">Example: Mars Rover MDP</h3>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Mars Rover</div>
+      <p>
+        Consider a Mars rover that can occupy one of seven discrete locations
+        $s_1, s_2, \ldots, s_7$ arranged in a line. The rover has two deterministic
+        actions: <strong>move left</strong> ($a_1$) and <strong>move right</strong> ($a_2$).
+        At the boundaries, the rover stays in place.
+      </p>
+      <p>
+        The reward structure is: $+1$ in state $s_1$, $+10$ in state $s_7$, and $0$
+        in all other states (regardless of the action taken). The challenge for the
+        rover is to figure out how to navigate to high-reward locations while
+        balancing the discounted value of reaching the far-right state $s_7$ against
+        the smaller but closer reward at $s_1$.
+      </p>
+      <p>
+        With 7 states and 2 actions, the number of possible <em>deterministic</em>
+        policies is $|A|^{|S|} = 2^7 = 128$. Even for this tiny problem, exhaustive
+        search over policies becomes tedious&mdash;motivating the algorithmic approaches
+        we develop below.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 3: Policies                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="policies">Policies</h2>
+
+    <p>
+      A <strong>policy</strong> is the agent's strategy: it specifies which action to take
+      (or a distribution over actions) in each state. Policies can be deterministic
+      (mapping each state to a single action) or stochastic (mapping each state to a
+      probability distribution over actions).
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Policy</div>
+      <p>
+        A policy $\pi$ is a conditional distribution over actions given states:
+      </p>
+      $$\pi(a \mid s) = P(a_t = a \mid s_t = s)$$
+      <p>
+        For a deterministic policy, $\pi(s)$ returns a single action directly. For a
+        stochastic policy, $\pi(a \mid s)$ gives the probability of choosing action $a$
+        in state $s$.
+      </p>
+    </div>
+
+    <h3 id="mdp-plus-policy">MDP + Policy = MRP</h3>
+
+    <p>
+      A crucial observation is that once we fix a policy $\pi$ in an MDP, the resulting
+      system is just an MRP. The action randomness introduced by $\pi$ can be "folded in"
+      to the dynamics and reward:
+    </p>
+
+    $$R^\pi(s) = \sum_{a \in A} \pi(a \mid s)\, R(s, a)$$
+
+    $$P^\pi(s' \mid s) = \sum_{a \in A} \pi(a \mid s)\, P(s' \mid s, a)$$
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>
+        Since an MDP with a fixed policy reduces to an MRP $(S, R^\pi, P^\pi, \gamma)$,
+        we can reuse all of our MRP evaluation techniques (matrix inversion, iterative
+        dynamic programming) to compute the value of any given policy. This reduction
+        is the conceptual linchpin of policy evaluation.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 4: Value Functions for MDPs                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="value-functions">Value Functions for MDPs</h2>
+
+    <h3 id="state-value">State Value Function</h3>
+
+    <p>
+      The <strong>state value function</strong> $V^\pi(s)$ measures the expected
+      discounted return when starting in state $s$ and following policy $\pi$ thereafter.
+      Since an MDP under a fixed policy is an MRP, the Bellman equation carries over
+      directly:
+    </p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Bellman Expectation Equation &mdash; State Value</div>
+      $$V^\pi(s) = \sum_{a \in A} \pi(a \mid s) \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^\pi(s') \right]$$
+      <p>
+        This says: the value of state $s$ under policy $\pi$ is the expected
+        immediate reward plus the discounted expected value of the next state,
+        where the expectation is over both the action chosen by $\pi$ and the
+        stochastic transition.
+      </p>
+    </div>
+
+    <p>
+      For a <strong>deterministic</strong> policy $\pi(s) = a$, the outer sum collapses
+      and the equation simplifies to:
+    </p>
+
+    $$V^\pi(s) = R(s, \pi(s)) + \gamma \sum_{s' \in S} P(s' \mid s, \pi(s))\, V^\pi(s')$$
+
+    <h3 id="action-value">Action Value Function (Q-function)</h3>
+
+    <p>
+      While $V^\pi(s)$ tells us how good it is to <em>be</em> in a state, we often need to
+      know how good it is to take a <em>specific action</em> in that state and then follow
+      the policy. This is the <strong>state-action value function</strong> or Q-function.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; State-Action Value Function</div>
+      $$Q^\pi(s, a) = R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^\pi(s')$$
+      <p>
+        $Q^\pi(s, a)$ is the expected return from taking action $a$ in state $s$
+        and then following policy $\pi$ from the next state onward.
+      </p>
+    </div>
+
+    <p>
+      The relationship between $V^\pi$ and $Q^\pi$ is immediate: $V^\pi(s) = \sum_{a} \pi(a \mid s)\, Q^\pi(s, a)$.
+      The Q-function will prove especially useful for policy improvement, since comparing
+      $Q^\pi(s, a)$ across actions tells us which action is best in each state.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 5: Policy Evaluation                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="policy-evaluation">Policy Evaluation</h2>
+
+    <p>
+      <strong>Policy evaluation</strong> is the problem of computing $V^\pi$ for a given
+      policy $\pi$. Since the MDP under $\pi$ is an MRP, we can apply the same iterative
+      dynamic programming approach: start with $V_0(s) = 0$ everywhere and repeatedly
+      apply the Bellman expectation equation as an update rule.
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Iterative Policy Evaluation (MDP)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $V_0(s) = 0$ for all $s \in S$</li>
+        <li><span class="keyword">For</span> $k = 1, 2, \ldots$ until convergence:</li>
+        <li style="list-style: none; padding-left: 20px;">
+          <span class="keyword">For all</span> $s \in S$:
+          $$V_k^\pi(s) = \sum_{a \in A} \pi(a \mid s) \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V_{k-1}^\pi(s') \right]$$
+        </li>
+      </ol>
+      <p class="comment">
+        Each update is called a "Bellman backup" for policy $\pi$. For a deterministic
+        policy, the update simplifies to
+        $V_k^\pi(s) = R(s, \pi(s)) + \gamma \sum_{s' \in S} P(s' \mid s, \pi(s))\, V_{k-1}^\pi(s')$.
+      </p>
+    </div>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; One Iteration on the Mars Rover</div>
+      <p>
+        Consider the Mars rover with policy $\pi(s) = a_1$ (always move left) for all states.
+        The dynamics at state $s_6$ are: $P(s_6 \mid s_6, a_1) = 0.5$ and $P(s_7 \mid s_6, a_1) = 0.5$.
+        Given $\gamma = 0.5$ and $V_k = [1,\, 0,\, 0,\, 0,\, 0,\, 0,\, 10]$:
+      </p>
+      $$V_{k+1}(s_6) = R(s_6, a_1) + \gamma \sum_{s'} P(s' \mid s_6, a_1)\, V_k(s')$$
+      $$= 0 + 0.5 \times (0.5 \times 0 + 0.5 \times 10) = 0 + 0.5 \times 5 = 2.5$$
+      <p>
+        The value of $s_6$ increases from 0 to 2.5 as information about the high reward
+        at $s_7$ propagates one step backward through the Bellman backup.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 6: Optimal Policies and Value Functions        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="optimal-value">Optimal Policies and Value Functions</h2>
+
+    <p>
+      The central goal of MDP planning is to find an <strong>optimal policy</strong>
+      $\pi^*$&mdash;one that achieves the highest possible value in every state simultaneously:
+    </p>
+
+    $$\pi^*(s) = \arg\max_\pi V^\pi(s)$$
+
+    <p>
+      A fundamental result in MDP theory guarantees the following properties for finite
+      state-action spaces with $\gamma &lt; 1$ (or episodic tasks):
+    </p>
+
+    <ul>
+      <li>There exists a <strong>unique optimal value function</strong> $V^*(s) = \max_\pi V^\pi(s)$.</li>
+      <li>An optimal policy for an infinite-horizon MDP is <strong>deterministic</strong> and <strong>stationary</strong> (it does not depend on the time step).</li>
+      <li>The optimal policy is <strong>not necessarily unique</strong>&mdash;multiple policies may all achieve the same optimal value $V^*$.</li>
+    </ul>
+
+    <h3 id="bellman-optimality">Bellman Optimality Equation</h3>
+
+    <p>
+      The optimal value function satisfies its own recursive characterization. Instead of
+      averaging over actions according to a policy, we <em>maximize</em>:
+    </p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Bellman Optimality Equation</div>
+      $$V^*(s) = \max_{a \in A} \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^*(s') \right]$$
+      <p>Equivalently, for the optimal Q-function:</p>
+      $$Q^*(s, a) = R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^*(s')$$
+      <p>with $V^*(s) = \max_{a} Q^*(s, a)$. Given $Q^*$, the optimal policy is simply
+      $\pi^*(s) = \arg\max_{a} Q^*(s, a)$.</p>
+    </div>
+
+    <p>
+      Unlike the Bellman expectation equation (which is linear in $V^\pi$), the Bellman
+      optimality equation is <strong>nonlinear</strong> due to the $\max$ operator. This
+      means we cannot solve it with a single matrix inversion. Instead, we turn to
+      iterative algorithms: policy iteration and value iteration.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 7: Policy Iteration                            -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="policy-iteration">Policy Iteration</h2>
+
+    <p>
+      <strong>Policy iteration (PI)</strong> alternates between two steps: (1) fully
+      evaluate the current policy to obtain its value function, and (2) improve the policy
+      by acting greedily with respect to that value function. This evaluate-then-improve
+      loop is guaranteed to converge to the optimal policy in a finite number of iterations.
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Policy Iteration</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $\pi_0(s)$ arbitrarily for all $s \in S$. Set $i = 0$.</li>
+        <li><span class="keyword">Repeat</span> until $\pi_{i+1} = \pi_i$ (policy has converged):</li>
+        <li style="list-style: none; padding-left: 20px;">
+          <strong>Policy Evaluation:</strong> Compute $V^{\pi_i}$ by solving the Bellman expectation equation for policy $\pi_i$ (via matrix inversion or iterative updates).
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 8px;">
+          <strong>Policy Improvement:</strong> For all $s \in S$ and $a \in A$, compute
+          $$Q^{\pi_i}(s, a) = R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^{\pi_i}(s')$$
+          then set
+          $$\pi_{i+1}(s) = \arg\max_{a} Q^{\pi_i}(s, a)$$
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 8px;">
+          Set $i = i + 1$.
+        </li>
+      </ol>
+    </div>
+
+    <h3 id="monotonic-improvement">Monotonic Improvement Guarantee</h3>
+
+    <p>
+      The key theoretical property of policy iteration is that each improvement step
+      produces a policy that is <em>at least as good</em> as the previous one&mdash;and
+      strictly better if the previous policy was suboptimal.
+    </p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; Monotonic Policy Improvement</div>
+      <p>
+        Let $\pi_{i+1}$ be the greedy policy obtained from $V^{\pi_i}$. Then for all $s \in S$:
+      </p>
+      $$V^{\pi_{i+1}}(s) \geq V^{\pi_i}(s)$$
+      <p>
+        with strict inequality for at least one state if $\pi_i$ is not already optimal.
+      </p>
+    </div>
+
+    <details class="proof">
+      <summary>Proof of Monotonic Improvement</summary>
+      <div class="proof-content">
+        <p>
+          The intuition proceeds in two stages. First, the greedy step guarantees a
+          one-step improvement. Then we extend this to the full infinite-horizon value.
+        </p>
+        <p>
+          <strong>One-step improvement.</strong> By construction of the greedy policy:
+        </p>
+        $$V^{\pi_i}(s) \leq \max_{a} Q^{\pi_i}(s, a) = \max_{a} \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V^{\pi_i}(s') \right]$$
+        <p>
+          The right-hand side is precisely $Q^{\pi_i}(s, \pi_{i+1}(s))$, the value of
+          taking the new policy's action for one step and then reverting to $\pi_i$. Since
+          this is at least $V^{\pi_i}(s)$, taking $\pi_{i+1}$'s action for one step and
+          then following $\pi_i$ is at least as good as following $\pi_i$ from the start.
+        </p>
+        <p>
+          <strong>Extension to all steps.</strong> But $\pi_{i+1}$ does not just take one
+          improved action&mdash;it takes the improved action at <em>every</em> subsequent
+          step as well. Applying the one-step argument recursively (or by induction on the
+          horizon), the improvement compounds at each time step, yielding
+          $V^{\pi_{i+1}}(s) \geq V^{\pi_i}(s)$ for all $s$.
+        </p>
+      </div>
+    </details>
+
+    <h3 id="pi-convergence">Convergence of Policy Iteration</h3>
+
+    <p>
+      Since there are at most $|A|^{|S|}$ deterministic policies and each iteration
+      strictly improves the policy (unless already optimal), policy iteration must
+      terminate in a finite number of steps. When the policy stops changing&mdash;that
+      is, $\pi_{i+1}(s) = \pi_i(s)$ for all $s$&mdash;the policy satisfies the Bellman
+      optimality equation and is therefore optimal.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>
+        If the policy does not change after an improvement step, it can <em>never</em>
+        change again. This is because $Q^{\pi_{i+1}} = Q^{\pi_i}$ when
+        $\pi_{i+1} = \pi_i$, so the next greedy step produces the same policy:
+        $\pi_{i+2}(s) = \arg\max_{a} Q^{\pi_{i+1}}(s, a) = \arg\max_{a} Q^{\pi_i}(s, a) = \pi_{i+1}(s)$.
+        Convergence is permanent.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 8: Bellman Operators                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="bellman-operators">Bellman Backup Operators</h2>
+
+    <p>
+      It is useful to formalize the update rules we have been using as <strong>operators</strong>
+      that map one value function to another. This abstraction clarifies the relationship
+      between policy evaluation, policy iteration, and value iteration.
+    </p>
+
+    <h3 id="policy-bellman-operator">Policy Bellman Operator</h3>
+
+    <p>
+      The <strong>Bellman backup operator for policy $\pi$</strong> is defined as:
+    </p>
+
+    $$B^\pi V(s) = R^\pi(s) + \gamma \sum_{s' \in S} P^\pi(s' \mid s)\, V(s')$$
+
+    <p>
+      Policy evaluation amounts to finding the <strong>fixed point</strong> of $B^\pi$: the
+      value function $V^\pi$ such that $B^\pi V^\pi = V^\pi$. Iteratively applying
+      $B^\pi$ to any initial value function converges to this fixed point:
+    </p>
+
+    $$V^\pi = B^\pi B^\pi \cdots B^\pi V_0$$
+
+    <h3 id="optimal-bellman-operator">Optimal Bellman Operator</h3>
+
+    <p>
+      The <strong>Bellman optimality operator</strong> (or simply the Bellman operator) replaces
+      the policy average with a maximization:
+    </p>
+
+    $$BV(s) = \max_{a \in A} \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V(s') \right]$$
+
+    <p>
+      This operator takes a value function as input and returns an improved value function.
+      Its fixed point is the optimal value function $V^*$: $BV^* = V^*$.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 9: Value Iteration                             -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="value-iteration">Value Iteration</h2>
+
+    <p>
+      <strong>Value iteration (VI)</strong> takes a different approach from policy iteration.
+      Instead of fully evaluating a policy and then improving it, value iteration directly
+      computes the optimal value function by repeatedly applying the Bellman optimality
+      operator. The idea is to maintain the optimal value for acting with $k$ steps
+      remaining, and then extend to $k+1$ steps.
+    </p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Value Iteration</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $V_0(s) = 0$ for all $s \in S$. Set $k = 0$.</li>
+        <li><span class="keyword">Repeat</span> until $\|V_{k+1} - V_k\|_\infty \leq \epsilon$:</li>
+        <li style="list-style: none; padding-left: 20px;">
+          <span class="keyword">For each</span> $s \in S$:
+          $$V_{k+1}(s) = \max_{a \in A} \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V_k(s') \right]$$
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 8px;">
+          Set $k = k + 1$.
+        </li>
+        <li><span class="keyword">Extract policy:</span>
+          $$\pi(s) = \arg\max_{a \in A} \left[ R(s, a) + \gamma \sum_{s' \in S} P(s' \mid s, a)\, V_{k}(s') \right]$$
+        </li>
+      </ol>
+      <p class="comment">
+        In Bellman operator notation: $V_{k+1} = B V_k$. The algorithm converges when the
+        Bellman residual $\|V_{k+1} - V_k\|_\infty$ falls below threshold $\epsilon$.
+      </p>
+    </div>
+
+    <p>
+      An important distinction: value iteration does <em>not</em> maintain an explicit policy
+      during the iterations. It only extracts the optimal policy at the end (or at any
+      intermediate step, if desired) using the greedy operation.
+    </p>
+
+    <h3 id="finite-horizon-vi">Finite-Horizon Value Iteration</h3>
+
+    <p>
+      For problems with a finite horizon $H$, value iteration has an especially clean
+      interpretation. We run exactly $H$ iterations, and $V_k$ represents the optimal
+      value with $k$ steps remaining. The optimal policy for a finite-horizon problem
+      is generally <strong>non-stationary</strong>: the best action in a state may depend
+      on how many steps remain. This contrasts with the infinite-horizon case, where the
+      optimal policy is always stationary.
+    </p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Mars Rover with Finite Horizon</div>
+      <p>
+        Consider running the Mars rover MDP with horizon $H = 4$ and $\gamma = 1/2$,
+        starting from state $s_4$. We can estimate the value by simulating episodes
+        and averaging returns:
+      </p>
+      <ul>
+        <li>Episode $s_4 \to s_5 \to s_6 \to s_7$: return $= 0 + \frac{1}{2}\cdot 0 + \frac{1}{4}\cdot 0 + \frac{1}{8}\cdot 10 = 1.25$</li>
+        <li>Episode $s_4 \to s_4 \to s_5 \to s_4$: return $= 0 + \frac{1}{2}\cdot 0 + \frac{1}{4}\cdot 0 + \frac{1}{8}\cdot 0 = 0$</li>
+        <li>Episode $s_4 \to s_3 \to s_2 \to s_1$: return $= 0 + \frac{1}{2}\cdot 0 + \frac{1}{4}\cdot 0 + \frac{1}{8}\cdot 1 = 0.125$</li>
+      </ul>
+      <p>
+        The average return over many such simulated episodes converges to the true value
+        $V^\pi(s_4)$ by concentration inequalities&mdash;no Markov assumption is required
+        for this Monte Carlo estimate.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 10: Contraction and Convergence                -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="contraction">Contraction and Convergence</h2>
+
+    <p>
+      Why do these iterative algorithms converge? The answer lies in the
+      <strong>contraction</strong> property of the Bellman operators.
+    </p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Contraction Operator</div>
+      <p>
+        An operator $O$ is a <strong>contraction</strong> (with respect to a norm $\|\cdot\|$)
+        if there exists a constant $0 \leq c &lt; 1$ such that for all value functions $V, V'$:
+      </p>
+      $$\|OV - OV'\| \leq c \cdot \|V - V'\|$$
+      <p>
+        A contraction operator brings any two inputs closer together after each application.
+        By the Banach fixed-point theorem, a contraction on a complete metric space has a
+        unique fixed point, and iterating the operator from any starting point converges to it.
+      </p>
+    </div>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; Bellman Operator is a $\gamma$-Contraction</div>
+      <p>
+        For $\gamma &lt; 1$, the Bellman optimality operator $B$ is a contraction in the
+        infinity norm with modulus $\gamma$:
+      </p>
+      $$\|BV - BV'\|_\infty \leq \gamma \|V - V'\|_\infty$$
+      <p>
+        The same holds for the policy Bellman operator $B^\pi$. This guarantees that both
+        value iteration and (the iterative component of) policy iteration converge to their
+        respective fixed points.
+      </p>
+    </div>
+
+    <details class="proof">
+      <summary>Proof: Bellman Backup is a Contraction</summary>
+      <div class="proof-content">
+        <p>Let $\|V - V'\|_\infty = \max_s |V(s) - V'(s)|$. We want to show that $\|BV - BV'\|_\infty \leq \gamma \|V - V'\|_\infty$.</p>
+        <p>For any state $s$, let $a^* = \arg\max_a \left[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s')\right]$ and $a' = \arg\max_a \left[R(s,a) + \gamma \sum_{s'} P(s'|s,a) V'(s')\right]$. Then:</p>
+        $$BV(s) - BV'(s) = \left[R(s, a^*) + \gamma \sum_{s'} P(s'|s,a^*) V(s')\right] - \left[R(s, a') + \gamma \sum_{s'} P(s'|s,a') V'(s')\right]$$
+        <p>Since $a^*$ maximizes the first expression, we have $BV(s) \leq R(s, a') + \gamma \sum_{s'} P(s'|s,a') V(s')$ is <em>not</em> guaranteed, but we can bound the difference by noting that for any fixed action $a$:</p>
+        $$BV(s) \leq R(s,a) + \gamma \sum_{s'} P(s'|s,a) V(s') \quad \text{is maximized at } a^*$$
+        <p>Using the fact that $\max_a f(a) - \max_a g(a) \leq \max_a [f(a) - g(a)]$, we get:</p>
+        $$BV(s) - BV'(s) \leq \max_a \gamma \sum_{s' \in S} P(s'|s,a)\left[V(s') - V'(s')\right]$$
+        $$\leq \gamma \max_a \sum_{s'} P(s'|s,a) \|V - V'\|_\infty = \gamma \|V - V'\|_\infty$$
+        <p>The last step uses the fact that probabilities sum to 1. By symmetry (swapping $V$ and $V'$), we also get $BV'(s) - BV(s) \leq \gamma \|V - V'\|_\infty$. Combining both directions:</p>
+        $$|BV(s) - BV'(s)| \leq \gamma \|V - V'\|_\infty \quad \forall s$$
+        <p>Taking the max over $s$ yields $\|BV - BV'\|_\infty \leq \gamma \|V - V'\|_\infty$. $\square$</p>
+      </div>
+    </details>
+
+    <p>
+      The contraction property has a powerful practical consequence: regardless of how
+      we initialize $V_0$, value iteration will converge to $V^*$. The distance to the
+      fixed point shrinks by a factor of $\gamma$ at each iteration, so after $k$
+      iterations the error is at most $\gamma^k \|V_0 - V^*\|_\infty$. For $\gamma$
+      close to 1, convergence is slow; for small $\gamma$, it is fast.
+    </p>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 11: Comparing PI and VI                        -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="pi-vs-vi">Comparing Policy Iteration and Value Iteration</h2>
+
+    <p>
+      Both policy iteration and value iteration converge to the optimal policy, but they
+      take different routes to get there. Understanding their trade-offs is important for
+      choosing the right algorithm in practice.
+    </p>
+
+    <p>
+      <strong>Policy iteration</strong> computes the <em>exact</em> infinite-horizon value
+      of the current policy before improving it. Each outer iteration is expensive (the
+      evaluation step may require many inner iterations or an $O(|S|^3)$ matrix solve),
+      but the number of outer iterations is typically small&mdash;bounded by $|A|^{|S|}$
+      in the worst case, but often far fewer.
+    </p>
+
+    <p>
+      <strong>Value iteration</strong> performs a single Bellman optimality backup per
+      iteration (combining evaluation and improvement into one step). Each iteration is
+      cheaper than a full policy evaluation, but more iterations may be needed for the
+      values to converge.
+    </p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>
+        Policy iteration guarantees <strong>monotonic improvement</strong> in the policy's
+        true infinite-horizon value at each outer iteration. Value iteration, by contrast,
+        monotonically improves the <em>value function estimates</em>, but the policy
+        extracted at each intermediate step is not guaranteed to improve monotonically.
+        Despite this, both algorithms provably converge to the same optimal solution.
+        Policy iteration is closely related to the <strong>policy gradient</strong> methods
+        that are widely used in modern RL.
+      </p>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- SECTION 12: Summary                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <h2 id="summary">Summary</h2>
+
+    <p>
+      This lecture established the core mathematical framework for sequential decision-making
+      when a model of the world is known. The key concepts and results are:
+    </p>
+
+    <ul>
+      <li><strong>Markov Decision Processes</strong> formalize decision problems as tuples $(S, A, P, R, \gamma)$.</li>
+      <li>A <strong>policy</strong> $\pi(a \mid s)$ specifies behavior; fixing a policy in an MDP yields an MRP.</li>
+      <li>The <strong>state value function</strong> $V^\pi(s)$ and <strong>action-value function</strong> $Q^\pi(s,a)$ quantify expected returns under a policy.</li>
+      <li>The <strong>Bellman expectation equation</strong> characterizes $V^\pi$; the <strong>Bellman optimality equation</strong> characterizes $V^*$.</li>
+      <li><strong>Policy iteration</strong> alternates between evaluation and greedy improvement, with guaranteed monotonic policy improvement and finite convergence.</li>
+      <li><strong>Value iteration</strong> directly applies the Bellman optimality operator, converging to $V^*$ via the contraction property.</li>
+      <li>Both the policy and optimality Bellman operators are <strong>$\gamma$-contractions</strong> in the infinity norm, ensuring unique fixed points and guaranteed convergence.</li>
+    </ul>
+
+    <p>
+      All of the algorithms presented here require a complete model of the environment
+      (the transition probabilities $P$ and the reward function $R$). In the next lecture,
+      we will address the far more common scenario in real-world RL: how to evaluate a
+      policy when the model is <em>unknown</em> and the agent must learn from experience.
+    </p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture01.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Introduction to RL</span>
+    </a>
+    <a class="next" href="lecture03.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Model-Free Policy Evaluation</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false}
+    ],
+    macros: {
+      '\\\\E': '\\\\mathbb{E}',
+      '\\\\R': '\\\\mathbb{R}',
+      '\\\\Vpi': 'V^{\\\\pi}',
+      '\\\\Qpi': 'Q^{\\\\pi}',
+      '\\\\Vstar': 'V^{*}',
+      '\\\\Qstar': 'Q^{*}'
+    }
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 7: PPO, GAE &amp; Imitation Learning — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 7</div>
+    <h2>PPO, GAE &amp; Imitation Learning</h2>
+    <p class="lecture-desc">Trust regions, proximal policy optimization, generalized advantage estimation, and an introduction to learning from demonstrations.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">TRPO</span>
+      <span class="lecture-tag">PPO</span>
+      <span class="lecture-tag">GAE</span>
+      <span class="lecture-tag">Imitation Learning</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture7pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: Motivation -->
+    <h2 id="problems-with-policy-gradients">Problems with Vanilla Policy Gradients</h2>
+
+    <p>Policy gradient algorithms optimize the objective $\max_\theta J(\pi_\theta) = \mathbb{E}_{\tau \sim \pi_\theta}\!\left[\sum_{t=0}^{\infty} \gamma^t r_t\right]$ by taking stochastic gradient ascent steps using the policy gradient</p>
+
+    $$g = \nabla_\theta J(\pi_\theta) = \mathbb{E}_{\tau \sim \pi_\theta}\!\left[\sum_{t=0}^{\infty} \gamma^t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, A^{\pi_\theta}(s_t, a_t)\right].$$
+
+    <p>While conceptually elegant, vanilla policy gradients suffer from two critical limitations:</p>
+
+    <ul>
+      <li><strong>Poor sample efficiency:</strong> Each batch of trajectories is used for a single gradient step and then discarded. Collecting new on-policy data after every update is expensive, especially in real-world settings like robotics.</li>
+      <li><strong>Step-size sensitivity:</strong> A distance in parameter space $\theta$ does not correspond to a meaningful distance in policy space. A small change to $\theta$ might drastically alter the policy's behavior, while a large change might have negligible effect. Getting the learning rate right is therefore notoriously difficult.</li>
+    </ul>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>For tabular policies, the policy space is the set of stochastic matrices $\Pi = \{\pi \in \mathbb{R}^{|\mathcal{S}| \times |\mathcal{A}|} : \sum_a \pi_{sa} = 1,\; \pi_{sa} \geq 0\}$. Policy gradients take steps in parameter space, which may not align with meaningful directions in this policy space. This mismatch is the root cause of instability.</p>
+    </div>
+
+    <p>These issues motivate the central question of this lecture: how can we take larger, more reliable policy improvement steps while guaranteeing that performance does not degrade?</p>
+
+    <!-- Section 2: Importance Sampling for Off-Policy Policy Gradients -->
+    <h2 id="importance-sampling">Importance Sampling for Policy Gradients</h2>
+
+    <p>One natural idea for improving sample efficiency is to reuse data collected under an old policy $\pi_{\theta'}$ when estimating the gradient for a new policy $\pi_\theta$. This requires <strong>importance sampling</strong>, a technique for estimating expectations under one distribution using samples from another:</p>
+
+    $$\mathbb{E}_{x \sim P}\!\left[f(x)\right] = \mathbb{E}_{x \sim Q}\!\left[\frac{P(x)}{Q(x)} f(x)\right] \approx \frac{1}{|D|} \sum_{x \in D} \frac{P(x)}{Q(x)} f(x), \quad D \sim Q.$$
+
+    <p>The ratio $P(x)/Q(x)$ is the <strong>importance sampling weight</strong>. Applying this to the policy gradient, we can express the gradient under policy $\theta$ as an expectation under a different policy $\theta'$:</p>
+
+    $$g = \mathbb{E}_{\tau \sim \pi_{\theta'}}\!\left[\sum_{t=0}^{\infty} \frac{P(\tau_t \mid \theta)}{P(\tau_t \mid \theta')} \gamma^t \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, A^\theta(s_t, a_t)\right].$$
+
+    <p>However, this formulation has a serious practical problem. The trajectory-level importance weight decomposes as a product over time steps:</p>
+
+    $$\frac{P(\tau_t \mid \theta)}{P(\tau_t \mid \theta')} = \prod_{t'=0}^{t} \frac{\pi_\theta(a_{t'} \mid s_{t'})}{\pi_{\theta'}(a_{t'} \mid s_{t'})},$$
+
+    <p>where the transition dynamics cancel. Even for policies that are only slightly different, many small ratios multiply together to produce extreme values&mdash;either vanishing to zero or exploding to infinity. This makes the variance of the estimator impractically large.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p>The core challenge is: how can we make efficient use of data collected under an old policy while avoiding the catastrophic variance of full trajectory importance sampling? The answer lies in constraining how far the new policy can deviate from the old one.</p>
+    </div>
+
+    <!-- Section 3: Monotonic Improvement Theory -->
+    <h2 id="monotonic-improvement">Monotonic Improvement Theory</h2>
+
+    <p>The theoretical foundation for trust-region methods comes from bounding the performance difference between two policies. In the previous lecture, we introduced the <strong>surrogate objective</strong>:</p>
+
+    $$L_\pi(\pi') = \frac{1}{1 - \gamma} \mathbb{E}_{\substack{s \sim d^\pi \\ a \sim \pi'}} \!\left[\frac{\pi'(a \mid s)}{\pi(a \mid s)} A^\pi(s, a)\right],$$
+
+    <p>which approximates $J(\pi') - J(\pi)$ by using the state visitation distribution $d^\pi$ of the old policy $\pi$ instead of the (unknown) distribution $d^{\pi'}$ of the new policy. This approximation is accurate when $\pi'$ and $\pi$ are close in KL divergence.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Performance Bound</div>
+      <p><strong>Relative Policy Performance Bound</strong> (Achiam, Held, Tamar, Abbeel, 2017). The true performance improvement is bounded by:</p>
+      $$\left|J(\pi') - J(\pi) - L_\pi(\pi')\right| \leq C \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}$$
+      <p>where $C$ is a constant that depends on the MDP. Rearranging, this gives a <strong>guaranteed improvement</strong> lower bound:</p>
+      $$J(\pi') - J(\pi) \geq L_\pi(\pi') - C \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}.$$
+    </div>
+
+    <p>This bound suggests an algorithm: maximize the right-hand side with respect to $\pi'$. If we define the update rule as</p>
+
+    $$\pi_{k+1} = \arg\max_{\pi'} \; L_{\pi_k}(\pi') - C \sqrt{\mathbb{E}_{s \sim d^{\pi_k}}\!\left[D_{\mathrm{KL}}(\pi' \| \pi_k)[s]\right]},$$
+
+    <p>then we can prove that $J(\pi_{k+1}) \geq J(\pi_k)$ at every step. The proof is elegant: the current policy $\pi_k$ is a feasible point with objective value zero (since $L_{\pi_k}(\pi_k) = 0$ and $D_{\mathrm{KL}}(\pi_k \| \pi_k) = 0$), so the maximum must be at least zero, and the bound guarantees non-negative improvement.</p>
+
+    <details class="proof">
+      <summary>Proof of Monotonic Improvement</summary>
+      <div class="proof-content">
+        <p>Suppose $\pi_{k+1}$ and $\pi_k$ are related by the optimization above. Observe that $\pi_k$ itself is a feasible point, and the objective evaluated at $\pi_k$ equals zero:</p>
+        <p>$L_{\pi_k}(\pi_k) \propto \mathbb{E}_{s, a \sim d^{\pi_k}, \pi_k}\!\left[A^{\pi_k}(s,a)\right] = 0$ (since the advantage is zero on average under the current policy), and $D_{\mathrm{KL}}(\pi_k \| \pi_k)[s] = 0$ for all $s$.</p>
+        <p>Therefore the optimal value of the objective is $\geq 0$, which by the performance bound implies $J(\pi_{k+1}) - J(\pi_k) \geq 0$. This argument holds even when we restrict the domain to a parametric policy class $\Pi_\theta$, as long as $\pi_k \in \Pi_\theta$.</p>
+      </div>
+    </details>
+
+    <p>In practice, the constant $C$ provided by the theory is quite large when $\gamma$ is close to 1, which makes the penalty too conservative and the resulting steps too small. Two practical remedies have emerged: <strong>tuning the KL penalty coefficient</strong> (leading to PPO) and <strong>using a hard KL constraint</strong> (leading to TRPO).</p>
+
+    <!-- Section 4: Proximal Policy Optimization -->
+    <h2 id="ppo">Proximal Policy Optimization (PPO)</h2>
+
+    <p><strong>Proximal Policy Optimization</strong> (Schulman et al., 2017) is a family of methods that approximately enforce the KL constraint without the computational expense of computing natural gradients (as TRPO requires). PPO has become one of the most widely used RL algorithms, powering applications from game-playing agents to the fine-tuning of ChatGPT. It comes in two variants.</p>
+
+    <h3 id="adaptive-kl-penalty">Variant 1: Adaptive KL Penalty</h3>
+
+    <p>The first variant replaces the hard KL constraint with a penalty term, solving the unconstrained optimization problem:</p>
+
+    $$\theta_{k+1} = \arg\max_\theta \; L_{\theta_k}(\theta) - \beta_k \bar{D}_{\mathrm{KL}}(\theta \| \theta_k).$$
+
+    <p>The penalty coefficient $\beta_k$ is adapted between iterations: if the KL divergence after the update is too large, $\beta_k$ is increased; if it is too small, $\beta_k$ is decreased. This mechanism approximately enforces the desired trust-region constraint without requiring a fixed threshold.</p>
+
+    <h3 id="clipped-objective">Variant 2: Clipped Surrogate Objective</h3>
+
+    <p>The second variant&mdash;and the one used most frequently in practice&mdash;avoids the KL divergence entirely and instead clips the objective function directly.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; PPO Clipped Objective</div>
+      <p>Define the <strong>importance sampling ratio</strong> between the new and old policies:</p>
+      $$r_t(\theta) = \frac{\pi_\theta(a_t \mid s_t)}{\pi_{\theta_k}(a_t \mid s_t)}.$$
+      <p>The <strong>clipped surrogate objective</strong> is:</p>
+      $$L^{\mathrm{CLIP}}_{\theta_k}(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta_k}}\!\left[\sum_{t=0}^{T} \min\!\Big(r_t(\theta)\,\hat{A}_t^{\pi_k},\; \mathrm{clip}\big(r_t(\theta),\, 1-\epsilon,\, 1+\epsilon\big)\,\hat{A}_t^{\pi_k}\Big)\right],$$
+      <p>where $\epsilon$ is a hyperparameter (typically $\epsilon = 0.2$). The policy update is $\theta_{k+1} = \arg\max_\theta L^{\mathrm{CLIP}}_{\theta_k}(\theta)$.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Why Clipping Works</div>
+      <p>The clipping mechanism creates a pessimistic bound on the policy improvement. Consider two cases:</p>
+      <ul>
+        <li><strong>When $\hat{A}_t > 0$</strong> (the action was better than expected): the objective encourages increasing $\pi_\theta(a_t \mid s_t)$, but the clip at $1 + \epsilon$ prevents the ratio from growing too large. This stops the policy from overcommitting to a seemingly good action based on noisy advantage estimates.</li>
+        <li><strong>When $\hat{A}_t < 0$</strong> (the action was worse than expected): the objective encourages decreasing $\pi_\theta(a_t \mid s_t)$, but the clip at $1 - \epsilon$ prevents the ratio from shrinking too far. This keeps the policy from aggressively avoiding actions that may have been unlucky rather than truly bad.</li>
+      </ul>
+      <p>By taking the minimum of the clipped and unclipped terms, PPO constructs a lower bound on the unclipped objective, ensuring conservative updates in both directions.</p>
+    </div>
+
+    <h3 id="ppo-algorithm">The PPO Algorithm</h3>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Proximal Policy Optimization (PPO-Clip)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> policy parameters $\theta_0$ and value function parameters $\phi_0$.</li>
+        <li><span class="keyword">For</span> $k = 0, 1, 2, \ldots$:</li>
+        <li style="list-style: none; padding-left: 1.5em;">
+          <ol type="a">
+            <li>Collect a batch of trajectories $\{(s_t, a_t, r_t)\}$ by running policy $\pi_{\theta_k}$ in the environment for $T$ timesteps.</li>
+            <li>Compute advantage estimates $\hat{A}_t$ using GAE (see below) with the current value function $V_\phi$.</li>
+            <li><span class="keyword">For</span> several epochs over the collected batch:</li>
+            <li style="list-style: none; padding-left: 1.5em;">
+              <ul>
+                <li>Update $\theta$ by maximizing $L^{\mathrm{CLIP}}_{\theta_k}(\theta)$ via minibatch SGD.</li>
+                <li>Update $\phi$ by minimizing $(V_\phi(s_t) - \hat{R}_t)^2$ via minibatch SGD.</li>
+              </ul>
+            </li>
+          </ol>
+        </li>
+      </ol>
+      <p class="comment">Key advantage: the same batch of data is reused for multiple gradient steps before collecting new trajectories, dramatically improving sample efficiency compared to vanilla policy gradients.</p>
+    </div>
+
+    <p>PPO converges to a local optimum and, despite its simplicity, achieves strong empirical performance across a wide range of tasks. Its ease of implementation, data efficiency through multiple gradient steps per batch, and conservative updates through clipping have made it the default algorithm for many practitioners.</p>
+
+    <!-- Section 5: Generalized Advantage Estimation -->
+    <h2 id="gae">Generalized Advantage Estimation (GAE)</h2>
+
+    <p>A key question inside PPO (and indeed any advantage-based policy gradient method) is: how should we estimate the advantage function $\hat{A}_t$? Generalized Advantage Estimation (Schulman et al., ICLR 2016) provides an elegant answer by interpolating between low-bias, high-variance estimators and high-bias, low-variance estimators.</p>
+
+    <h3 id="n-step-estimators">Review: $n$-Step Advantage Estimators</h3>
+
+    <p>Recall that different $n$-step returns yield different advantage estimators. Define the <strong>TD residual</strong>:</p>
+
+    $$\delta_t^V = r_t + \gamma V(s_{t+1}) - V(s_t).$$
+
+    <p>Then the $k$-step advantage estimator is:</p>
+
+    $$\hat{A}_t^{(k)} = \sum_{l=0}^{k-1} \gamma^l \delta_{t+l}^V = \sum_{l=0}^{k-1} \gamma^l r_{t+l} + \gamma^k V(s_{t+k}) - V(s_t).$$
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Special Cases</div>
+      <ul>
+        <li><strong>1-step ($k=1$):</strong> $\hat{A}_t^{(1)} = \delta_t^V = r_t + \gamma V(s_{t+1}) - V(s_t)$. This is just the TD(0) advantage&mdash;low variance but potentially high bias if the value function $V$ is inaccurate.</li>
+        <li><strong>2-step ($k=2$):</strong> $\hat{A}_t^{(2)} = \delta_t^V + \gamma \delta_{t+1}^V = r_t + \gamma r_{t+1} + \gamma^2 V(s_{t+2}) - V(s_t)$. Uses one more actual reward before bootstrapping.</li>
+        <li><strong>$\infty$-step ($k=\infty$):</strong> $\hat{A}_t^{(\infty)} = \sum_{l=0}^{\infty} \gamma^l r_{t+l} - V(s_t)$. This is the Monte Carlo advantage&mdash;zero bias but high variance since it depends on the entire trajectory.</li>
+      </ul>
+    </div>
+
+    <p>Each $k$-step estimator trades off bias and variance differently. Shorter horizons rely more heavily on the (possibly inaccurate) value function, introducing bias but reducing variance. Longer horizons use more actual reward signal, reducing bias at the cost of higher variance. GAE provides a principled way to blend all of these estimators.</p>
+
+    <h3 id="gae-derivation">The GAE Formula</h3>
+
+    <p>GAE defines the advantage as an <strong>exponentially weighted average</strong> of all $k$-step estimators:</p>
+
+    $$\hat{A}_t^{\mathrm{GAE}(\gamma,\lambda)} = (1 - \lambda)\!\left(\hat{A}_t^{(1)} + \lambda\,\hat{A}_t^{(2)} + \lambda^2\,\hat{A}_t^{(3)} + \cdots\right).$$
+
+    <p>Expanding and collecting terms, this simplifies to a remarkably clean expression:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Generalized Advantage Estimation</div>
+      $$\hat{A}_t^{\mathrm{GAE}(\gamma,\lambda)} = \sum_{l=0}^{\infty} (\gamma\lambda)^l \,\delta_{t+l}^V$$
+      <p>where $\delta_t^V = r_t + \gamma V(s_{t+1}) - V(s_t)$ is the TD residual and $\lambda \in [0, 1]$ controls the bias-variance tradeoff.</p>
+    </div>
+
+    <details class="proof">
+      <summary>Derivation of the GAE Formula</summary>
+      <div class="proof-content">
+        <p>Starting from the weighted sum and substituting the $k$-step estimators as sums of TD residuals:</p>
+        $$\hat{A}_t^{\mathrm{GAE}} = (1 - \lambda)\!\Big(\delta_t^V + \lambda(\delta_t^V + \gamma \delta_{t+1}^V) + \lambda^2(\delta_t^V + \gamma \delta_{t+1}^V + \gamma^2 \delta_{t+2}^V) + \cdots\Big).$$
+        <p>Grouping by the TD residual index:</p>
+        $$= (1 - \lambda)\Big(\delta_t^V(1 + \lambda + \lambda^2 + \cdots) + \gamma\delta_{t+1}^V(\lambda + \lambda^2 + \cdots) + \gamma^2\delta_{t+2}^V(\lambda^2 + \lambda^3 + \cdots) + \cdots\Big).$$
+        <p>Each geometric series evaluates as $\sum_{j=0}^{\infty} \lambda^j = \frac{1}{1-\lambda}$ (shifted appropriately). After simplification:</p>
+        $$= (1 - \lambda)\Big(\delta_t^V \cdot \frac{1}{1-\lambda} + \gamma\delta_{t+1}^V \cdot \frac{\lambda}{1-\lambda} + \gamma^2\delta_{t+2}^V \cdot \frac{\lambda^2}{1-\lambda} + \cdots\Big) = \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}^V.$$
+      </div>
+    </details>
+
+    <h3 id="gae-bias-variance">Bias-Variance Tradeoff in GAE</h3>
+
+    <div class="callout insight">
+      <div class="callout-label">GAE Bias-Variance Tradeoff</div>
+      <p>The parameter $\lambda$ smoothly interpolates between two extremes:</p>
+      <ul>
+        <li><strong>$\lambda = 0$:</strong> $\hat{A}_t^{\mathrm{GAE}(\gamma, 0)} = \delta_t^V = r_t + \gamma V(s_{t+1}) - V(s_t)$. This is the 1-step TD advantage&mdash;low variance but biased if $V$ is imperfect.</li>
+        <li><strong>$\lambda = 1$:</strong> $\hat{A}_t^{\mathrm{GAE}(\gamma, 1)} = \sum_{l=0}^{\infty} \gamma^l \delta_{t+l}^V = \sum_{l=0}^{\infty} \gamma^l r_{t+l} - V(s_t)$. This is the Monte Carlo advantage&mdash;unbiased but high variance.</li>
+      </ul>
+      <p>In practice, values of $\lambda \in (0, 1)$ (commonly $\lambda = 0.95$ or $\lambda = 0.97$) strike a good balance. The optimal choice depends on the quality of the learned value function: a better $V$ permits lower $\lambda$ values without incurring too much bias.</p>
+    </div>
+
+    <h3 id="gae-in-ppo">GAE in PPO: The Truncated Version</h3>
+
+    <p>In practice, PPO uses a <strong>truncated</strong> version of GAE. Instead of collecting infinite-length trajectories, the agent runs for $T$ timesteps and computes:</p>
+
+    $$\hat{A}_t = \sum_{l=0}^{T-t-1} (\gamma\lambda)^l \delta_{t+l}^V.$$
+
+    <p>This truncation is necessary for practical implementation but introduces a small additional bias. The benefits are twofold: we only need to run the policy for $T$ timesteps before performing an update, and the resulting advantage estimates are substantially lower variance than full Monte Carlo returns while retaining most of their accuracy.</p>
+
+    <!-- Section 6: PPO Summary -->
+    <h2 id="ppo-summary">PPO in Perspective</h2>
+
+    <p>PPO brings together several ideas into a cohesive, practical algorithm:</p>
+
+    <ul>
+      <li><strong>Data efficiency:</strong> Multiple gradient steps can be taken on a single batch of collected data before gathering new trajectories from the updated policy.</li>
+      <li><strong>Stability through clipping:</strong> The clipped objective (or alternatively, the adaptive KL penalty) helps ensure monotonic improvement in practice, preventing the catastrophic performance collapses that plague vanilla policy gradients.</li>
+      <li><strong>Simplicity:</strong> Unlike TRPO, which requires computing the Fisher information matrix and solving a constrained optimization problem, PPO uses only first-order optimization (standard SGD or Adam).</li>
+      <li><strong>Versatility:</strong> PPO has been successfully applied to continuous control, Atari games, robotic manipulation, and notably the RLHF stage of training large language models like ChatGPT.</li>
+    </ul>
+
+    <p>The idea of conservative policy updating has deep roots in RL, going back to the early 2000s. PPO represents a particularly elegant and practical incarnation of this principle, converging to local optima with strong empirical performance across diverse domains.</p>
+
+    <!-- Section 7: Imitation Learning -->
+    <h2 id="imitation-learning">Imitation Learning: Learning from Demonstrations</h2>
+
+    <p>We now shift to an entirely different paradigm for obtaining policies. In many settings, expert decision-making behavior already exists&mdash;a surgeon performing an operation, a human driving a car, or a skilled player completing a game. Rather than learning from reward signals through trial and error (which can be sample-intensive and require careful reward engineering), <strong>imitation learning</strong> aims to learn a policy directly from expert demonstrations.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Imitation Learning Setup</div>
+      <p><strong>Input:</strong></p>
+      <ul>
+        <li>State space $\mathcal{S}$ and action space $\mathcal{A}$.</li>
+        <li>Transition model $P(s' \mid s, a)$ (sometimes known, sometimes not).</li>
+        <li><strong>No reward function $R$.</strong></li>
+        <li>A set of expert demonstration trajectories $(s_0, a_0, s_1, a_1, \ldots)$ where actions are drawn from an expert policy $\pi^*$.</li>
+      </ul>
+      <p><strong>Goal:</strong> Learn a policy that performs as well as (or better than) the expert.</p>
+    </div>
+
+    <p>Imitation learning is useful when it is easier for the expert to <em>demonstrate</em> the desired behavior than to specify a reward function that would generate it, or to write the policy directly. Three main approaches exist:</p>
+
+    <ol>
+      <li><strong>Behavioral Cloning:</strong> Directly learn the expert's policy using supervised learning.</li>
+      <li><strong>Inverse RL:</strong> Recover a reward function $R$ from the demonstrations, then optimize a policy for that reward.</li>
+      <li><strong>Apprenticeship Learning via Inverse RL:</strong> Combine reward recovery with policy optimization to match or exceed the expert.</li>
+    </ol>
+
+    <!-- Section 8: Behavioral Cloning -->
+    <h2 id="behavioral-cloning">Behavioral Cloning</h2>
+
+    <p>The most straightforward approach to imitation learning is <strong>behavioral cloning</strong>, which reduces the problem to standard supervised learning. Given expert state-action pairs $(s_0, a_0), (s_1, a_1), (s_2, a_2), \ldots$, we choose a policy class (neural network, decision tree, etc.) and train a model to predict the expert's action given the state.</p>
+
+    <p>Behavioral cloning has a long and successful history. Two early landmarks are Pomerleau's ALVINN system (NIPS 1989), which learned to steer an autonomous vehicle from camera images, and Sammut et al. (ICML 1992), who learned to fly in a flight simulator. More recently, behavioral cloning with recurrent neural networks (BCRNN) has achieved strong results on robot manipulation tasks (Mandlekar et al., CoRL 2021).</p>
+
+    <h3 id="compounding-errors">The Compounding Error Problem</h3>
+
+    <p>Despite its simplicity, behavioral cloning has a fundamental flaw rooted in the violation of supervised learning's i.i.d. assumption. In supervised learning, training and test data come from the same distribution. But in an MDP:</p>
+
+    <ul>
+      <li><strong>Training:</strong> States are drawn from the expert's distribution, $s_t \sim d^{\pi^*}$.</li>
+      <li><strong>Test (deployment):</strong> States are drawn from the <em>learned policy's</em> distribution, $s_t \sim d^{\pi_\theta}$.</li>
+    </ul>
+
+    <p>When the learned policy makes a small error, it reaches a state that the expert would never have visited. From this unfamiliar state, the policy is likely to make another error, which compounds over time.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Compounding Errors Bound</div>
+      <p>If the learned policy makes an error at each time step with probability at most $\epsilon$, the expected total number of errors over a horizon $T$ does <strong>not</strong> scale linearly as $\epsilon T$ (as it would under i.i.d. data). Instead, due to distribution shift, the errors compound quadratically:</p>
+      $$\mathbb{E}[\text{total errors}] \propto \epsilon T^2.$$
+      <p>This result is formalized in Ross et al. (2011), "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning."</p>
+    </div>
+
+    <p>This quadratic scaling means that even a policy with a very low per-step error rate can perform poorly over long horizons. The distribution mismatch between expert and learned trajectories is the core issue.</p>
+
+    <!-- Section 9: DAgger -->
+    <h2 id="dagger">DAgger: Dataset Aggregation</h2>
+
+    <p><strong>DAgger</strong> (Ross et al., 2011) addresses the distribution shift problem by iteratively collecting expert labels along the trajectories induced by the <em>current learned policy</em>, rather than the expert policy.</p>
+
+    <p>The key idea is simple: run the learned policy in the environment, observe the states it visits, and then query the expert for the correct action at each of those states. By training on this aggregated dataset&mdash;which now includes states from the learned policy's distribution&mdash;the resulting policy obtains good performance under its own induced state distribution.</p>
+
+    <p>DAgger provably avoids the quadratic compounding error, achieving a stationary deterministic policy with bounded error. However, it has a key practical limitation: it requires ongoing access to the expert, who must label new states at each iteration. In many applications (surgical robotics, autonomous driving), this interactive querying is expensive or impractical.</p>
+
+    <!-- Section 10: Inverse RL and Feature Matching -->
+    <h2 id="inverse-rl">Inverse Reinforcement Learning</h2>
+
+    <p>An alternative to directly cloning the policy is to recover the underlying <strong>reward function</strong> that the expert is (implicitly) optimizing. This is the task of <strong>inverse reinforcement learning (IRL)</strong>. The appeal is that the reward function is often a more compact and transferable representation of the expert's intent than the policy itself.</p>
+
+    <h3 id="linear-reward-irl">Linear Feature Reward IRL</h3>
+
+    <p>A common assumption is that the reward function is linear in a set of state features:</p>
+
+    $$R(s) = w^T x(s), \quad w \in \mathbb{R}^n, \; x: \mathcal{S} \to \mathbb{R}^n.$$
+
+    <p>Under this assumption, the value of any policy $\pi$ can be expressed compactly as:</p>
+
+    $$V^\pi(s_0) = \mathbb{E}_{s \sim \pi}\!\left[\sum_{t=0}^{\infty} \gamma^t R(s_t) \;\middle|\; s_0\right] = w^T \mathbb{E}_{s \sim \pi}\!\left[\sum_{t=0}^{\infty} \gamma^t x(s_t) \;\middle|\; s_0\right] = w^T \mu(\pi),$$
+
+    <p>where $\mu(\pi)$ denotes the <strong>discounted state feature frequency</strong> vector under policy $\pi$. Since the expert's policy is optimal, $V^{\pi^*} \geq V^\pi$ for all $\pi$, which means $w^{*T} \mu(\pi^*) \geq w^{*T} \mu(\pi)$ for all $\pi \neq \pi^*$.</p>
+
+    <h3 id="feature-matching">Feature Matching</h3>
+
+    <p>Abbeel and Ng (2004) showed that if a policy $\pi$ matches the expert's discounted feature expectations, it is guaranteed to perform well. Specifically, if $\|\mu(\pi) - \mu(\pi^*)\|_1 \leq \epsilon$, then for all weight vectors $w$ with $\|w\|_\infty \leq 1$ (by H&ouml;lder's inequality):</p>
+
+    $$|w^T \mu(\pi) - w^T \mu(\pi^*)| \leq \epsilon.$$
+
+    <p>However, a fundamental <strong>ambiguity</strong> remains: there are infinitely many reward functions that make the expert's policy optimal, and infinitely many stochastic policies that can match the expert's feature counts. Which should we choose?</p>
+
+    <!-- Section 11: Maximum Entropy IRL -->
+    <h2 id="maxent-irl">Maximum Entropy Inverse RL</h2>
+
+    <p>The <strong>maximum entropy principle</strong> provides an elegant resolution to the ambiguity problem. Among all distributions over trajectories that match the observed feature expectations, choose the one with maximum entropy&mdash;that is, the one that introduces no additional preferences beyond what the data demands.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Maximum Entropy IRL</div>
+      <p>Given expert demonstrations with average feature counts $\tilde{\mu}$, find the distribution $P(\tau)$ over trajectories that solves:</p>
+      $$\max_{P} -\sum_\tau P(\tau) \log P(\tau) \quad \text{s.t.} \quad \sum_\tau P(\tau)\mu_\tau = \tilde{\mu}, \quad \sum_\tau P(\tau) = 1,$$
+      <p>where $\mu_\tau = \sum_{s_i \in \tau} x(s_i)$ is the feature count vector for trajectory $\tau$.</p>
+    </div>
+
+    <p>For linear reward functions, this optimization yields an exponential family distribution over trajectories:</p>
+
+    $$P(\tau \mid w) = \frac{1}{Z(w)} \exp\!\left(w^T \mu_\tau\right) = \frac{1}{Z(w)} \exp\!\left(\sum_{s_i \in \tau} w^T x(s_i)\right),$$
+
+    <p>where $Z(w) = \sum_\tau \exp(w^T \mu_\tau)$ is the partition function. This distribution assigns exponentially higher probability to trajectories with higher cumulative reward, while treating trajectories of equal reward as equally likely.</p>
+
+    <p>For <strong>stochastic MDPs</strong>, the transition dynamics must be incorporated:</p>
+
+    $$P(\tau \mid w, P(s' \mid s, a)) \approx \frac{\exp(w^T \mu_\tau)}{Z(w, P(s' \mid s,a))} \prod_{s_i, a_i \in \tau} P(s_{i+1} \mid s_i, a_i).$$
+
+    <p>The reward weights $w$ are learned by maximizing the log-likelihood of the observed demonstrations. The gradient takes an intuitive form:</p>
+
+    $$\nabla_w L(w) = \tilde{\mu} - \sum_{s_i} D(s_i)\, x(s_i),$$
+
+    <p>where $D(s_i)$ is the state visitation frequency under the current model. The gradient is simply the difference between the expert's empirical feature counts and the learner's expected feature counts. When these match, the gradient is zero and the reward function is consistent with the observed behavior.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">MaxEnt IRL vs. Behavioral Cloning</div>
+      <p>The maximum entropy IRL formulation requires knowledge of the transition model (or the ability to gather samples from it) in order to compute state visitation frequencies. By contrast, behavioral cloning requires no dynamics model at all&mdash;it operates purely on the observed state-action pairs. This difference highlights a fundamental tradeoff: IRL recovers a more transferable representation (the reward function) but at the cost of additional assumptions and computational overhead.</p>
+    </div>
+
+    <p>The MaxEnt IRL framework has been hugely influential and forms the basis for several subsequent methods, including Generative Adversarial Imitation Learning (Ho and Ermon, NeurIPS 2016), which frames the problem as a GAN-style game between a generator (the learned policy) and a discriminator (distinguishing expert from learned trajectories).</p>
+
+    <!-- Section 12: Summary -->
+    <h2 id="summary">Summary and Looking Ahead</h2>
+
+    <p>This lecture covered two major themes. First, we completed our treatment of advanced policy gradient methods by developing <strong>PPO</strong> and <strong>GAE</strong>&mdash;the practical tools that make trust-region policy optimization work at scale. PPO's clipped objective and GAE's bias-variance interpolation together form one of the most effective and widely deployed RL algorithms. Second, we introduced <strong>imitation learning</strong> as an alternative to reward-based RL, studying behavioral cloning (and its compounding error problem), DAgger's interactive solution, and inverse RL's approach of recovering the underlying reward function.</p>
+
+    <p>A recurring theme connects both halves: the importance of working with the right distribution. In PPO, we must keep the new policy close to the old one to avoid distribution shift in importance sampling. In behavioral cloning, distribution shift between expert and learned trajectories causes quadratic error growth. DAgger and inverse RL each address this challenge from a different angle.</p>
+
+    <p>In the next lecture, we will dive deeper into imitation learning, explore <strong>reinforcement learning from human feedback (RLHF)</strong>, and see how these techniques are combined to align large language models with human preferences&mdash;one of the most consequential applications of RL today.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture06.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Policy Gradient II</span>
+    </a>
+    <a class="next" href="lecture08.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Imitation Learning &amp; RLHF</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 6: Policy Gradient II — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 6</div>
+    <h2>Policy Gradient II</h2>
+    <p class="lecture-desc">Variance reduction with baselines, the actor-critic architecture, and advanced policy optimization.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Baselines</span>
+      <span class="lecture-tag">Actor-Critic</span>
+      <span class="lecture-tag">Advantage Function</span>
+      <span class="lecture-tag">Variance Reduction</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture6pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: Recap and the Variance Problem -->
+    <h2 id="reinforce-recap">Recap: REINFORCE and the Variance Problem</h2>
+
+    <p>In the previous lecture we derived the <strong>REINFORCE</strong> algorithm, a Monte Carlo policy gradient method that updates policy parameters by ascending the gradient of expected return. The core update rule uses the likelihood ratio trick to express the policy gradient as an expectation under the current policy:</p>
+
+    $$\nabla_\theta V(\theta) \approx \frac{1}{m} \sum_{i=1}^{m} \sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t^{(i)} \mid s_t^{(i)}) \, G_t^{(i)}$$
+
+    <p>where $G_t^{(i)} = \sum_{t'=t}^{T-1} r_{t'}^{(i)}$ is the empirical return from time step $t$ onward in the $i$-th sampled trajectory. The temporal structure improvement (only weighting by future rewards rather than the entire trajectory return) already helps, but this estimator remains <strong>unbiased yet extremely high-variance</strong>. In practice, the raw REINFORCE estimator is too noisy to be useful without further refinement. This lecture introduces three key ideas for taming that variance: baselines, the advantage function, and the actor-critic architecture.</p>
+
+    <!-- Section 2: Baselines -->
+    <h2 id="baselines">Introducing a Baseline</h2>
+
+    <p>The central idea of a <strong>baseline</strong> is simple: instead of weighting each log-probability gradient by the raw return $G_t$, we subtract a state-dependent function $b(s_t)$ and use $G_t - b(s_t)$ instead. The resulting policy gradient estimator is:</p>
+
+    $$\nabla_\theta \mathbb{E}_\tau[R] = \mathbb{E}_\tau\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi(a_t \mid s_t;\, \theta) \left(\sum_{t'=t}^{T-1} r_{t'} - b(s_t)\right)\right]$$
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <strong>Intuition for why baselines reduce variance.</strong> Without a baseline, every action's log-probability is pushed up if the trajectory had positive return and pushed down if it was negative&mdash;even if "positive" was merely less terrible than average. By subtracting a baseline that estimates the expected return, we center the gradient signal: actions that led to <em>better than expected</em> outcomes are reinforced, while those leading to <em>worse than expected</em> outcomes are discouraged. The gradient magnitudes shrink, reducing variance, without distorting the direction of improvement.
+    </div>
+
+    <h3 id="baseline-unbiased">The Baseline Does Not Introduce Bias</h3>
+
+    <p>The remarkable property of baselines is that for <em>any</em> function $b(s)$ that depends only on the state, the expected gradient remains unchanged. This is what makes baselines so powerful: we get variance reduction for free, with no bias penalty.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem</div>
+      <strong>Baseline invariance.</strong> For any function $b : \mathcal{S} \to \mathbb{R}$ that depends only on the state, the baseline term contributes zero to the expected gradient:
+      $$\mathbb{E}_\tau\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, b(s_t)\right] = 0$$
+      Therefore, subtracting $b(s_t)$ from the return does not change the expected value of the policy gradient estimator.
+    </div>
+
+    <div class="proof">
+      <div class="proof-label">Proof</div>
+      <p>We break the expectation over the full trajectory into nested expectations. Since $b(s_t)$ depends only on $s_t$ (and the history up to $s_t$), and $\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)$ depends on $a_t$ given $s_t$, we can condition on the history up to state $s_t$ and marginalize over the action:</p>
+
+      $$\mathbb{E}_\tau\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, b(s_t)\right] = \mathbb{E}_{s_{0:t}, a_{0:(t-1)}}\!\left[b(s_t)\, \mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right]\right]$$
+
+      <p>Now we evaluate the inner expectation over $a_t$. Using the likelihood ratio identity in reverse:</p>
+
+      $$\mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right] = \sum_a \pi(a \mid s_t;\, \theta)\, \frac{\nabla_\theta \pi(a \mid s_t;\, \theta)}{\pi(a \mid s_t;\, \theta)} = \sum_a \nabla_\theta \pi(a \mid s_t;\, \theta) = \nabla_\theta \sum_a \pi(a \mid s_t;\, \theta) = \nabla_\theta\, 1 = 0$$
+
+      <p>Since the inner expectation is zero regardless of $s_t$, the entire expression vanishes. $\square$</p>
+    </div>
+
+    <h3 id="optimal-baseline">The Optimal Baseline</h3>
+
+    <p>Since any baseline preserves unbiasedness, we should choose the one that minimizes variance. The variance of a single gradient term is:</p>
+
+    $$\text{Var}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\,(G_t - b(s_t))\right]$$
+
+    <p>Minimizing over $b$ leads to a weighted least-squares problem. Taking the derivative with respect to $b(s)$ and setting it to zero yields the optimal baseline:</p>
+
+    $$b^*(s) = \frac{\mathbb{E}_{a \sim \pi(\cdot|s),\, G \mid s, a}\!\left[\|\nabla_\theta \log \pi(a \mid s;\, \theta)\|^2\, G_t(s)\right]}{\mathbb{E}_{a \sim \pi(\cdot|s),\, G \mid s, a}\!\left[\|\nabla_\theta \log \pi(a \mid s;\, \theta)\|^2\right]}$$
+
+    <p>This is a weighted average of returns, where the weights are the squared magnitudes of the score function. In practice, the weights are often approximately constant across actions, so the optimal baseline simplifies to roughly the expected return from state $s$:</p>
+
+    $$b^*(s) \approx \mathbb{E}[G_t \mid s_t = s] = V^\pi(s)$$
+
+    <p>This provides strong motivation for using an estimate of the state value function $V^\pi(s)$ as the baseline&mdash;it is near-optimal and has a clean interpretation.</p>
+
+    <!-- Section 3: The Advantage Function -->
+    <h2 id="advantage-function">The Advantage Function</h2>
+
+    <p>When we use the state-value function $V^\pi(s)$ as the baseline and the state-action value function $Q^\pi(s, a)$ in place of the Monte Carlo return, the quantity that appears in the policy gradient has a name and a deep significance.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      <strong>Advantage Function.</strong> The advantage of taking action $a$ in state $s$ under policy $\pi$ is:
+      $$A^\pi(s, a) = Q^\pi(s, a) - V^\pi(s)$$
+      It measures how much better (or worse) action $a$ is compared to the average action under $\pi$ at state $s$.
+    </div>
+
+    <p>With this definition, the policy gradient takes the elegant form:</p>
+
+    $$\nabla_\theta \mathbb{E}_\tau[R] \approx \mathbb{E}_\tau\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, A^\pi(s_t, a_t)\right]$$
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <strong>Why the advantage function works.</strong> Because $\mathbb{E}_{a \sim \pi}[A^\pi(s, a)] = 0$ for every state $s$, the advantage is automatically centered. Actions better than average have positive advantage and get reinforced; actions worse than average have negative advantage and get suppressed. This centering is exactly what makes the gradient estimator low-variance compared to using raw returns.
+    </div>
+
+    <p>Recall the definitions of $Q^\pi$ and $V^\pi$:</p>
+
+    $$Q^\pi(s, a) = \mathbb{E}_\pi\!\left[r_0 + \gamma r_1 + \gamma^2 r_2 + \cdots \mid s_0 = s,\, a_0 = a\right]$$
+    $$V^\pi(s) = \mathbb{E}_\pi\!\left[r_0 + \gamma r_1 + \gamma^2 r_2 + \cdots \mid s_0 = s\right] = \mathbb{E}_{a \sim \pi}[Q^\pi(s, a)]$$
+
+    <p>Since $V^\pi(s)$ is the expectation of $Q^\pi(s, a)$ over the policy, the advantage function is naturally centered at zero and captures exactly the relative merit of each action.</p>
+
+    <!-- Section 4: Vanilla Policy Gradient with Baseline -->
+    <h2 id="vanilla-pg">Vanilla Policy Gradient with Baseline</h2>
+
+    <p>Putting together temporal structure, the baseline, and the advantage function, we arrive at the "vanilla" policy gradient algorithm. This is the practical starting point for most policy gradient implementations.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">REINFORCE with Baseline</div>
+      <ol>
+        <li>Initialize policy parameters $\theta$ and baseline $b$.</li>
+        <li><strong>for</strong> iteration $= 1, 2, \ldots$ <strong>do</strong></li>
+        <li style="list-style: none; padding-left: 1.5em;">Collect a set of trajectories $\{\tau^{(i)}\}$ by executing the current policy $\pi_\theta$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>for</strong> each timestep $t$ in each trajectory $\tau^{(i)}$ <strong>do</strong></li>
+        <li style="list-style: none; padding-left: 3em;">Compute the return: $G_t^{(i)} = \sum_{t'=t}^{T-1} r_{t'}^{(i)}$</li>
+        <li style="list-style: none; padding-left: 3em;">Compute the advantage estimate: $\hat{A}_t^{(i)} = G_t^{(i)} - b(s_t^{(i)})$</li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>end for</strong></li>
+        <li style="list-style: none; padding-left: 1.5em;">Re-fit the baseline by minimizing $\sum_{i,t} |b(s_t^{(i)}) - G_t^{(i)}|^2$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">Compute the policy gradient estimate: $\hat{g} = \sum_{i,t} \nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, \hat{A}_t$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">Update $\theta$ using $\hat{g}$ via SGD or Adam.</li>
+        <li><strong>end for</strong></li>
+      </ol>
+    </div>
+
+    <p>This algorithm already offers a substantial improvement over bare REINFORCE. However, it still relies on Monte Carlo returns $G_t$, which are high-variance because they depend on the randomness of an entire trajectory from time $t$ onward. Can we do better?</p>
+
+    <!-- Section 5: Actor-Critic Methods -->
+    <h2 id="actor-critic">Actor-Critic Methods</h2>
+
+    <p>The key observation is that the Monte Carlo return $G_t$ is an unbiased but high-variance estimate of $Q^\pi(s_t, a_t)$. Just as temporal-difference (TD) methods offered a lower-variance alternative to MC estimation in value-based RL, we can replace the MC return with a <strong>learned estimate</strong> of the value function. This introduces some bias (from function approximation) but can dramatically reduce variance.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      <strong>Actor-Critic.</strong> An actor-critic method maintains two components:
+      <ul>
+        <li>The <strong>actor</strong>: a parameterized policy $\pi_\theta(a \mid s)$ that selects actions.</li>
+        <li>The <strong>critic</strong>: a learned value function $V_w(s)$ (or $Q_w(s, a)$) that evaluates how good the current state (or state-action pair) is.</li>
+      </ul>
+      The actor is updated using policy gradient ascent, with the advantage estimated from the critic. The critic is updated by minimizing a value-function approximation error (e.g., via TD learning).
+    </div>
+
+    <h3 id="td-advantage">TD Error as Advantage Estimate</h3>
+
+    <p>The simplest actor-critic uses the one-step <strong>TD error</strong> as an estimate of the advantage:</p>
+
+    $$\delta_t = r_t + \gamma V_w(s_{t+1}) - V_w(s_t)$$
+
+    <p>This is a biased but low-variance estimate of $A^\pi(s_t, a_t)$. To see why it approximates the advantage, note that if the critic is perfect ($V_w = V^\pi$), then:</p>
+
+    $$\mathbb{E}[\delta_t \mid s_t, a_t] = \mathbb{E}[r_t + \gamma V^\pi(s_{t+1}) \mid s_t, a_t] - V^\pi(s_t) = Q^\pi(s_t, a_t) - V^\pi(s_t) = A^\pi(s_t, a_t)$$
+
+    <p>So the TD error is an unbiased estimate of the advantage when the critic is exact. In practice, function approximation introduces some bias, but the trade-off is usually worthwhile.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Advantage Actor-Critic (A2C)</div>
+      <ol>
+        <li>Initialize policy parameters $\theta$ and critic parameters $w$.</li>
+        <li><strong>for</strong> each episode <strong>do</strong></li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>for</strong> $t = 0, 1, \ldots, T-1$ <strong>do</strong></li>
+        <li style="list-style: none; padding-left: 3em;">Take action $a_t \sim \pi_\theta(\cdot \mid s_t)$, observe $r_t, s_{t+1}$.</li>
+        <li style="list-style: none; padding-left: 3em;">Compute TD error: $\delta_t = r_t + \gamma V_w(s_{t+1}) - V_w(s_t)$.</li>
+        <li style="list-style: none; padding-left: 3em;">Update critic: $w \leftarrow w + \alpha_w\, \delta_t\, \nabla_w V_w(s_t)$.</li>
+        <li style="list-style: none; padding-left: 3em;">Update actor: $\theta \leftarrow \theta + \alpha_\theta\, \delta_t\, \nabla_\theta \log \pi_\theta(a_t \mid s_t)$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>end for</strong></li>
+        <li><strong>end for</strong></li>
+      </ol>
+      <p>The critic uses the TD error to adjust its value estimates, while the actor uses the same TD error as a stand-in for the advantage to adjust the policy. This interleaving of policy improvement and policy evaluation is characteristic of all actor-critic methods.</p>
+    </div>
+
+    <h3 id="n-step-estimators">N-Step Advantage Estimators</h3>
+
+    <p>The one-step TD error sits at one extreme of a spectrum of advantage estimators. At the other extreme is the full Monte Carlo return. In between lie the <strong>$n$-step estimators</strong>, which blend bootstrapping and sampling:</p>
+
+    $$\hat{R}_t^{(1)} = r_t + \gamma V(s_{t+1})$$
+    $$\hat{R}_t^{(2)} = r_t + \gamma r_{t+1} + \gamma^2 V(s_{t+2})$$
+    $$\vdots$$
+    $$\hat{R}_t^{(\infty)} = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots$$
+
+    <p>Subtracting the baseline $V(s_t)$ from each gives the corresponding advantage estimators:</p>
+
+    $$\hat{A}_t^{(1)} = r_t + \gamma V(s_{t+1}) - V(s_t) \quad \text{(TD error, low variance, higher bias)}$$
+    $$\hat{A}_t^{(\infty)} = r_t + \gamma r_{t+1} + \gamma^2 r_{t+2} + \cdots - V(s_t) \quad \text{(MC, high variance, low bias)}$$
+
+    <p>The one-step estimator $\hat{A}_t^{(1)}$ has low variance because it depends on only one step of randomness, but it carries bias from the critic's approximation error. The Monte Carlo estimator $\hat{A}_t^{(\infty)}$ is unbiased (no bootstrapping) but has high variance because it accumulates randomness over the entire trajectory. Intermediate values of $n$ offer a smooth trade-off, and in practice methods like <strong>Generalized Advantage Estimation (GAE)</strong> take a weighted combination across all $n$-step returns.</p>
+
+    <!-- Section 6: Problems with Vanilla Policy Gradients -->
+    <h2 id="problems-pg">Problems with Vanilla Policy Gradients</h2>
+
+    <p>Even with baselines and actor-critic enhancements, vanilla policy gradient methods suffer from two fundamental issues:</p>
+
+    <p><strong>Poor sample efficiency.</strong> Policy gradients are inherently <em>on-policy</em>: each batch of trajectory data is used for a single gradient step and then discarded. This is wasteful. The gradient estimate $\hat{g}$ is only valid for the current policy $\pi_\theta$; once $\theta$ changes, the old data no longer provides an unbiased estimate. While importance sampling can in principle reuse old data, the importance weights for entire trajectories tend to vanish or explode:</p>
+
+    $$\frac{P(\tau_t \mid \theta)}{P(\tau_t \mid \theta')} = \prod_{t'=0}^{t} \frac{\pi_\theta(a_{t'} \mid s_{t'} )}{\pi_{\theta'}(a_{t'} \mid s_{t'})}$$
+
+    <p>Even for policies that are only slightly different, many small ratios multiply together to produce extreme values, making the estimator impractical for long horizons.</p>
+
+    <p><strong>Sensitivity to step size.</strong> Policy gradient algorithms perform stochastic gradient ascent: $\theta_{k+1} = \theta_k + \alpha_k \hat{g}_k$. If the step size $\alpha_k$ is too large, performance can <em>collapse</em>&mdash;the policy may enter a region of parameter space from which recovery is difficult. If the step is too small, progress is unacceptably slow. The fundamental issue is that <strong>distance in parameter space does not correspond to distance in policy space</strong>. A small change in $\theta$ can produce a dramatic change in the policy $\pi_\theta$ (for instance, near a sigmoid saturation point), and vice versa.</p>
+
+    <!-- Section 7: Policy Performance Bounds -->
+    <h2 id="performance-bounds">Policy Performance Bounds</h2>
+
+    <p>To design update rules that respect distance in <em>policy</em> space, we need to understand how the performance of two policies relates. The key result is the <strong>performance difference lemma</strong>.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem</div>
+      <strong>Performance Difference Lemma.</strong> For any two policies $\pi$ and $\pi'$:
+      $$J(\pi') - J(\pi) = \mathbb{E}_{\tau \sim \pi'}\!\left[\sum_{t=0}^{\infty} \gamma^t A^\pi(s_t, a_t)\right] = \frac{1}{1-\gamma}\, \mathbb{E}_{\substack{s \sim d^{\pi'} \\ a \sim \pi'}}\!\left[A^\pi(s, a)\right]$$
+      where $d^{\pi'}(s) = (1-\gamma)\sum_{t=0}^{\infty} \gamma^t P(s_t = s \mid \pi')$ is the discounted state visitation distribution under $\pi'$.
+    </div>
+
+    <p>This result is elegant: the performance difference between $\pi'$ and $\pi$ is expressed entirely in terms of the advantage function of the <em>old</em> policy $\pi$, evaluated on the state-action distribution of the <em>new</em> policy $\pi'$. However, it still requires samples from $\pi'$, which is exactly the policy we are trying to optimize.</p>
+
+    <h3 id="surrogate-objective">The Surrogate Objective</h3>
+
+    <p>To make this tractable, we approximate $d^{\pi'} \approx d^{\pi}$ and define the <strong>surrogate objective</strong>:</p>
+
+    $$L_\pi(\pi') = \frac{1}{1-\gamma}\, \mathbb{E}_{\substack{s \sim d^{\pi} \\ a \sim \pi}}\!\left[\frac{\pi'(a \mid s)}{\pi(a \mid s)}\, A^\pi(s, a)\right]$$
+
+    <p>This quantity can be estimated using trajectories from the old policy $\pi$, because both the state distribution and the sampling distribution are from $\pi$ (the importance weight $\pi'/\pi$ only applies at the action level, not across entire trajectories). How good is this approximation? A formal bound (Achiam et al., 2017) guarantees:</p>
+
+    $$\left|J(\pi') - J(\pi) - L_\pi(\pi')\right| \leq C\, \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}$$
+
+    <p>for a constant $C$ that depends on the discount factor and the range of the advantage function. The key takeaway is that when $\pi'$ and $\pi$ are close in KL-divergence, the surrogate $L_\pi(\pi')$ is a good approximation to the true performance difference.</p>
+
+    <!-- Section 8: Proximal Policy Optimization -->
+    <h2 id="ppo">Proximal Policy Optimization (PPO)</h2>
+
+    <p>The performance bound suggests a natural algorithmic strategy: maximize the surrogate $L_\pi(\pi')$ while constraining the KL-divergence between $\pi'$ and $\pi$ to remain small. <strong>Proximal Policy Optimization (PPO)</strong> implements this idea in two practical variants.</p>
+
+    <h3 id="ppo-kl">Variant 1: Adaptive KL Penalty</h3>
+
+    <p>The first variant solves an unconstrained optimization problem where the KL-divergence is added as a penalty term:</p>
+
+    $$\theta_{k+1} = \arg\max_\theta\; L_{\theta_k}(\theta) - \beta_k\, \bar{D}_{\mathrm{KL}}(\theta \| \theta_k)$$
+
+    <p>where $\bar{D}_{\mathrm{KL}}(\theta \| \theta_k) = \mathbb{E}_{s \sim d^{\pi_k}}[D_{\mathrm{KL}}(\pi_{\theta_k}(\cdot|s) \,\|\, \pi_\theta(\cdot|s))]$. The penalty coefficient $\beta_k$ adapts between iterations to approximately enforce a target KL-divergence $\delta$:</p>
+
+    <ul>
+      <li>If $\bar{D}_{\mathrm{KL}}(\theta_{k+1} \| \theta_k) \geq 1.5\,\delta$, the step was too large: double $\beta_{k+1} = 2\beta_k$.</li>
+      <li>If $\bar{D}_{\mathrm{KL}}(\theta_{k+1} \| \theta_k) \leq \delta / 1.5$, the step was conservative: halve $\beta_{k+1} = \beta_k / 2$.</li>
+    </ul>
+
+    <p>This adaptive scheme means the initial choice of $\beta_0$ is not critical&mdash;the coefficient quickly adjusts to the appropriate scale.</p>
+
+    <h3 id="ppo-clip">Variant 2: Clipped Objective</h3>
+
+    <p>The second and more popular variant avoids computing KL-divergence altogether. It defines the probability ratio $r_t(\theta) = \pi_\theta(a_t \mid s_t) / \pi_{\theta_k}(a_t \mid s_t)$ and clips it to prevent large policy changes:</p>
+
+    $$L_{\theta_k}^{\mathrm{CLIP}}(\theta) = \mathbb{E}_{\tau \sim \pi_k}\!\left[\sum_{t=0}^{T} \min\!\Big(r_t(\theta)\, \hat{A}_t^{\pi_k},\; \mathrm{clip}\big(r_t(\theta),\, 1 - \epsilon,\, 1 + \epsilon\big)\, \hat{A}_t^{\pi_k}\Big)\right]$$
+
+    <p>where $\epsilon$ is a hyperparameter (typically $\epsilon = 0.2$). The clipping works as follows:</p>
+
+    <ul>
+      <li>When $\hat{A}_t > 0$ (the action was better than expected), $r_t(\theta)$ is clipped from above at $1 + \epsilon$. The objective has no incentive to increase the probability ratio beyond $1 + \epsilon$.</li>
+      <li>When $\hat{A}_t < 0$ (the action was worse than expected), $r_t(\theta)$ is clipped from below at $1 - \epsilon$. The objective has no incentive to decrease the probability ratio beyond $1 - \epsilon$.</li>
+    </ul>
+
+    <p>In both cases, the minimum operation selects the more pessimistic estimate, preventing the optimization from exploiting large changes in the policy that would take us outside the region where the surrogate objective is trustworthy.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">PPO with Clipped Objective</div>
+      <ol>
+        <li>Initialize policy parameters $\theta_0$ and clipping threshold $\epsilon$.</li>
+        <li><strong>for</strong> $k = 0, 1, 2, \ldots$ <strong>do</strong></li>
+        <li style="list-style: none; padding-left: 1.5em;">Collect a set of partial trajectories $\mathcal{D}_k$ under policy $\pi_k = \pi(\theta_k)$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">Estimate advantages $\hat{A}_t^{\pi_k}$ using any advantage estimation algorithm.</li>
+        <li style="list-style: none; padding-left: 1.5em;">Compute policy update:
+          $$\theta_{k+1} = \arg\max_\theta\; L_{\theta_k}^{\mathrm{CLIP}}(\theta)$$
+          by taking $K$ steps of minibatch SGD (via Adam).</li>
+        <li><strong>end for</strong></li>
+      </ol>
+      <p>The clipped objective is simpler to implement than the KL-penalty variant and performs at least as well empirically. Crucially, $K$ gradient steps can be taken per batch of data, improving sample efficiency over vanilla policy gradients.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <strong>Why PPO enables multiple gradient steps.</strong> Vanilla policy gradients discard each batch after one step because the gradient estimate is only valid for the current policy. PPO's clipped objective automatically stops extracting useful signal once the new policy has moved too far from the data-collection policy, so multiple gradient steps per batch are safe. This is a major practical advantage.
+    </div>
+
+    <h3 id="ppo-performance">Empirical Performance</h3>
+
+    <p>PPO has become one of the most widely used deep RL algorithms. It demonstrates strong performance across a range of continuous-control benchmarks (e.g., MuJoCo locomotion tasks) while being considerably simpler to implement and tune than trust-region methods like TRPO. Notably, PPO was a key algorithmic component in the training of ChatGPT and other RLHF-based systems, where it is used to fine-tune language models against a learned reward model of human preferences. Implementation details like reward scaling, learning rate annealing, and advantage normalization can significantly affect performance (Engstrom et al., ICLR 2020).</p>
+
+    <!-- Section 9: Monotonic Improvement Theory -->
+    <h2 id="monotonic-improvement">Monotonic Improvement Theory</h2>
+
+    <p>The surrogate-plus-bound framework leads to a powerful theoretical guarantee. From the performance bound, we know:</p>
+
+    $$J(\pi') - J(\pi) \geq L_\pi(\pi') - C\, \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}$$
+
+    <p>Suppose we define the update rule as:</p>
+
+    $$\pi_{k+1} = \arg\max_{\pi'}\; L_{\pi_k}(\pi') - C\, \sqrt{\mathbb{E}_{s \sim d^{\pi_k}}\!\left[D_{\mathrm{KL}}(\pi' \| \pi_k)[s]\right]}$$
+
+    <p>Since $\pi_k$ itself is always a feasible point with objective value zero (because $L_{\pi_k}(\pi_k) = 0$ and $D_{\mathrm{KL}}(\pi_k \| \pi_k) = 0$), the optimal value of this maximization must be non-negative. By the performance bound, this implies $J(\pi_{k+1}) - J(\pi_k) \geq 0$. In other words, every update is guaranteed to improve (or at least not degrade) the policy. This is a <strong>monotonic improvement guarantee</strong>.</p>
+
+    <p>In practice, the constant $C$ from the theory is quite large when $\gamma$ is close to 1, leading to excessively conservative steps. PPO's adaptive KL penalty and clipped objective can be understood as practical approximations to this theoretical update rule, trading off the strict guarantee for larger (and faster) improvement steps.</p>
+
+    <!-- Section 10: Looking Ahead -->
+    <h2 id="looking-ahead">Looking Ahead</h2>
+
+    <p>This lecture traced a path from the high-variance REINFORCE estimator to the practical and widely deployed PPO algorithm. We saw how baselines reduce variance without introducing bias, how the advantage function provides a natural and centered measure of action quality, and how actor-critic architectures blend the benefits of policy gradient and value-function methods. The theoretical framework of policy performance bounds and surrogate objectives motivates constraining policy updates, which PPO implements via clipping or adaptive KL penalties.</p>
+
+    <p>In the next lecture, we will explore <strong>advanced policy gradient topics</strong> including Trust Region Policy Optimization (TRPO), natural policy gradients, and imitation learning&mdash;extending the policy optimization toolkit to settings where expert demonstrations are available and where we want even stronger guarantees on update quality.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture05.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Policy Gradient I</span>
+    </a>
+    <a class="next" href="lecture07.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Advanced Policy Gradient &amp; Imitation Learning</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

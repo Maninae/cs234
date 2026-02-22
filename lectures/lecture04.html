@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 4: Model-Free Control — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 4</div>
+    <h2>Model-Free Control</h2>
+    <p class="lecture-desc">From policy evaluation to control: SARSA, Q-learning, and scaling with function approximation and DQN.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">SARSA</span>
+      <span class="lecture-tag">Q-Learning</span>
+      <span class="lecture-tag">Function Approximation</span>
+      <span class="lecture-tag">DQN</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture4pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="recap">Recap: Model-Free Policy Evaluation</h2>
+
+    <p>In the previous lecture we developed methods for estimating the value function $V^\pi(s)$ of a fixed policy $\pi$ without access to the MDP's dynamics or reward model. We covered three main approaches.</p>
+
+    <p><strong>Monte Carlo (MC) policy evaluation</strong> waits until the end of a complete episode, computes the empirical return $G_t$, and updates the value estimate:</p>
+
+    $$V^\pi(s) \leftarrow (1 - \alpha) V^\pi(s) + \alpha\, G_t$$
+
+    <p><strong>Temporal-difference TD(0)</strong> updates after every single transition $(s, a, r, s')$, bootstrapping off the current value estimate:</p>
+
+    $$V^\pi(s) \leftarrow V^\pi(s) + \alpha \bigl[ r + \gamma V^\pi(s') - V^\pi(s) \bigr]$$
+
+    <p><strong>Certainty equivalence</strong> maintains maximum-likelihood estimates of the dynamics and reward models from observed tuples, then solves for $V^\pi$ using standard dynamic-programming techniques. This approach exploits the Markov structure directly.</p>
+
+    <h3 id="batch-convergence">Batch MC and TD Convergence</h3>
+
+    <p>When we use data repeatedly (batch/offline setting), MC and TD converge to different solutions. Given a finite set of $K$ episodes, repeatedly sampling an episode and applying updates, MC converges to the value that minimizes mean-squared error against observed returns, while TD(0) converges to the certainty-equivalence solution&mdash;the value function that would be correct if the maximum-likelihood MDP model were the true model.</p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; The AB Problem (Sutton &amp; Barto, Ex. 6.4)</div>
+      <p>Consider two states $A$ and $B$ with $\gamma = 1$ and 8 episodes of experience: one episode $A, 0, B, 0$; six episodes of $B, 1$; and one episode $B, 0$. Both MC and TD agree that $V(B) = 0.75$. However, they disagree on $V(A)$. MC sets $V(A) = 0$ (the only observed return from $A$ was 0), whereas TD sets $V(A) = 0.75$ because the MLE model says $A$ always transitions to $B$, and $V(B) = 0.75$. TD exploits the Markov structure; MC does not.</p>
+    </div>
+
+    <p>Key metrics for comparing policy evaluation algorithms include <strong>data efficiency</strong> (how many samples are needed), <strong>computational efficiency</strong> (cost per update&mdash;both MC and TD(0) are $O(L)$ per episode of length $L$), and <strong>accuracy</strong> (bias, variance, and mean-squared error). TD exploits the Markov property and can be more data-efficient when the domain is truly Markov, but it introduces bias through bootstrapping.</p>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="gpi">From Evaluation to Control: Generalized Policy Iteration</h2>
+
+    <p>Policy evaluation tells us how good a policy is; <strong>control</strong> tells us how to find a better one. The general recipe, called <strong>Generalized Policy Iteration (GPI)</strong>, alternates between two steps:</p>
+
+    <ol>
+      <li><strong>Policy evaluation:</strong> estimate $Q^\pi(s, a)$ (we use $Q$ rather than $V$ because, without a model, we cannot do the one-step lookahead required to extract a policy from $V$ alone).</li>
+      <li><strong>Policy improvement:</strong> set the new policy $\pi'$ to be greedy (or approximately greedy) with respect to the estimated $Q^\pi$.</li>
+    </ol>
+
+    <p>A subtlety arises immediately: if $\pi$ is deterministic, we never take actions other than $\pi(s)$ in state $s$, so we cannot estimate $Q(s, a)$ for $a \neq \pi(s)$. This is the <strong>exploration problem</strong>&mdash;we must try different actions to learn about them, even though doing so might sacrifice short-term reward.</p>
+
+    <h3 id="epsilon-greedy">Epsilon-Greedy Policies</h3>
+
+    <p>A simple and effective exploration strategy is the <strong>$\epsilon$-greedy policy</strong>. Given action-value estimates $Q(s, a)$ and $|A|$ available actions, we act as follows:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Epsilon-Greedy Policy</div>
+      <p>An $\epsilon$-greedy policy with respect to $Q(s,a)$ selects the greedy action with high probability and explores uniformly otherwise:</p>
+      $$\pi(a \mid s) = \begin{cases} 1 - \epsilon + \frac{\epsilon}{|A|} & \text{if } a = \arg\max_{a'} Q(s, a') \\ \frac{\epsilon}{|A|} & \text{otherwise} \end{cases}$$
+      <p>In words: with probability $1 - \epsilon$ take the best-known action; with probability $\epsilon$ choose uniformly at random among all actions (including the greedy one).</p>
+    </div>
+
+    <p>The crucial property of $\epsilon$-greedy policies is that policy improvement still works. If we form the $\epsilon$-greedy policy $\pi_{i+1}$ with respect to $Q^{\pi_i}$, the resulting policy is at least as good as $\pi_i$ everywhere.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; Monotonic Epsilon-Greedy Improvement</div>
+      <p>For any $\epsilon$-greedy policy $\pi_i$, the $\epsilon$-greedy policy $\pi_{i+1}$ with respect to $Q^{\pi_i}$ satisfies $V^{\pi_{i+1}}(s) \geq V^{\pi_i}(s)$ for all $s$. The proof follows from expanding:</p>
+      $$Q^{\pi_i}(s, \pi_{i+1}(s)) = \frac{\epsilon}{|A|} \sum_{a \in A} Q^{\pi_i}(s,a) + (1-\epsilon)\max_a Q^{\pi_i}(s,a) \geq V^{\pi_i}(s)$$
+      <p>The inequality holds because the max is at least as large as the average, ensuring $\pi_{i+1}$ is a monotonic improvement.</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="mc-control">Monte Carlo Control</h2>
+
+    <p>Combining MC evaluation with $\epsilon$-greedy improvement gives us a complete model-free control algorithm. After each episode, we update $Q$ estimates using observed returns, then recompute the $\epsilon$-greedy policy.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Monte Carlo On-Policy Control</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $Q(s,a) = 0$, $N(s,a) = 0$ for all $(s,a)$. Set $\epsilon = 1$, $k = 1$.</li>
+        <li>Set $\pi_k = \epsilon\text{-greedy}(Q)$.</li>
+        <li><span class="keyword">Loop:</span>
+          <ol>
+            <li>Sample episode $k$: $(s_{k,1}, a_{k,1}, r_{k,1}, s_{k,2}, \ldots, s_{k,T})$ following $\pi_k$.</li>
+            <li>Compute returns: $G_{k,t} = r_{k,t} + \gamma\, r_{k,t+1} + \gamma^2\, r_{k,t+2} + \cdots$</li>
+            <li><span class="keyword">For</span> each first-visit $(s_t, a_t)$ in episode $k$:
+              <ol>
+                <li>$N(s_t, a_t) \leftarrow N(s_t, a_t) + 1$</li>
+                <li>$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \frac{1}{N(s_t, a_t)} \bigl[ G_{k,t} - Q(s_t, a_t) \bigr]$</li>
+              </ol>
+            </li>
+            <li>$k \leftarrow k + 1$, $\epsilon \leftarrow 1/k$.</li>
+            <li>$\pi_k \leftarrow \epsilon\text{-greedy}(Q)$. <span class="comment">// Policy improvement</span></li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <h3 id="glie">GLIE: Greedy in the Limit of Infinite Exploration</h3>
+
+    <p>For MC control to converge to the <em>optimal</em> action-value function, we need the exploration schedule to satisfy the <strong>GLIE</strong> condition:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; GLIE</div>
+      <p>A learning policy satisfies Greedy in the Limit of Infinite Exploration (GLIE) if:</p>
+      <ol>
+        <li>All state-action pairs are visited infinitely often: $\lim_{i \to \infty} N_i(s,a) = \infty$ for all $(s, a)$.</li>
+        <li>The behavior policy converges to the greedy policy as $i \to \infty$.</li>
+      </ol>
+      <p>A simple GLIE strategy is $\epsilon$-greedy with $\epsilon_i = 1/i$, which decays to zero while ensuring sufficient exploration in early episodes.</p>
+    </div>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; GLIE MC Control Convergence</div>
+      <p>GLIE Monte Carlo control converges to the optimal state-action value function: $Q(s,a) \to Q^*(s,a)$ for all $(s, a)$.</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="on-off-policy">On-Policy vs. Off-Policy Learning</h2>
+
+    <p>Before introducing TD-based control algorithms, it is worth clarifying a fundamental distinction in how agents use experience.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Insight &mdash; On-Policy vs. Off-Policy</div>
+      <p><strong>On-policy</strong> methods learn the value of the policy currently being followed. The same policy that generates experience is the one being evaluated and improved. SARSA is the canonical example.</p>
+      <p><strong>Off-policy</strong> methods learn the value of a <em>target policy</em> $\pi$ while following a different <em>behavior policy</em> $\pi_b$. This decouples exploration (which $\pi_b$ handles) from the policy being optimized. Q-learning is the canonical example&mdash;it estimates $Q^*$ regardless of the behavior policy, as long as the behavior policy provides sufficient exploration.</p>
+      <p>Off-policy learning is more flexible (it can reuse data, learn from demonstrations, or learn about multiple policies simultaneously), but it introduces new challenges around sample corrections and stability.</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="sarsa">SARSA: On-Policy TD Control</h2>
+
+    <p>SARSA applies temporal-difference ideas to the control problem. Instead of waiting for full episode returns as in MC, it updates $Q$ after every transition. The name comes from the quintuple of values used in each update: $(S_t, A_t, R_t, S_{t+1}, A_{t+1})$.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; SARSA Update Rule</div>
+      <p>After observing transition $(s_t, a_t, r_t, s_{t+1})$ and choosing the next action $a_{t+1} \sim \pi(s_{t+1})$, update:</p>
+      $$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \bigl[ r_t + \gamma\, Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t) \bigr]$$
+      <p>The term in brackets is the <strong>TD error</strong>: the difference between the bootstrapped target $r_t + \gamma\, Q(s_{t+1}, a_{t+1})$ and the current estimate $Q(s_t, a_t)$. Because SARSA uses the action $a_{t+1}$ actually taken under the current policy, it is an on-policy algorithm.</p>
+    </div>
+
+    <p>The full algorithm interleaves this TD update with $\epsilon$-greedy policy improvement at every step:</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: SARSA (On-Policy TD Control)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $Q(s,a)$ for all $s \in \mathcal{S}, a \in \mathcal{A}$. Set $t = 0$, initial state $s_t = s_0$.</li>
+        <li>Choose $a_t \sim \pi(s_t)$ where $\pi$ is $\epsilon$-greedy w.r.t. $Q$.</li>
+        <li><span class="keyword">Loop:</span>
+          <ol>
+            <li>Take action $a_t$, observe $(r_t, s_{t+1})$.</li>
+            <li>Choose $a_{t+1} \sim \pi(s_{t+1})$. <span class="comment">// next action from current policy</span></li>
+            <li>$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \bigl[ r_t + \gamma\, Q(s_{t+1}, a_{t+1}) - Q(s_t, a_t) \bigr]$</li>
+            <li>$\pi(s_t) \leftarrow \epsilon\text{-greedy}(Q)$. <span class="comment">// improve policy</span></li>
+            <li>$t \leftarrow t + 1$.</li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="q-learning">Q-Learning: Off-Policy TD Control</h2>
+
+    <p>Q-learning modifies the SARSA update in a subtle but consequential way: instead of using the action $a_{t+1}$ that was actually taken, it bootstraps off the <em>best possible</em> action at the next state. This single change makes Q-learning an off-policy algorithm that directly estimates $Q^*$ regardless of the behavior policy.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Q-Learning Update Rule</div>
+      <p>After observing $(s_t, a_t, r_t, s_{t+1})$, update:</p>
+      $$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \bigl[ r_t + \gamma \max_{a'} Q(s_{t+1}, a') - Q(s_t, a_t) \bigr]$$
+      <p>The key difference from SARSA is the $\max_{a'}$ in the target. Q-learning asks: "What is the best I could do from $s_{t+1}$?" regardless of what action the behavior policy will actually take. This makes Q-learning a direct approximation of the Bellman optimality equation.</p>
+    </div>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Q-Learning with Epsilon-Greedy Exploration</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> $Q(s,a)$ for all $s \in \mathcal{S}, a \in \mathcal{A}$. Set $t = 0$, initial state $s_t = s_0$.</li>
+        <li>Set behavior policy $\pi_b = \epsilon\text{-greedy}(Q)$.</li>
+        <li><span class="keyword">Loop:</span>
+          <ol>
+            <li>Take $a_t \sim \pi_b(s_t)$. <span class="comment">// sample from behavior policy</span></li>
+            <li>Observe $(r_t, s_{t+1})$.</li>
+            <li>$Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \bigl[ r_t + \gamma \max_a Q(s_{t+1}, a) - Q(s_t, a_t) \bigr]$</li>
+            <li>$\pi_b(s_t) \leftarrow \epsilon\text{-greedy}(Q)$.</li>
+            <li>$t \leftarrow t + 1$.</li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; SARSA vs. Q-Learning on Mars Rover</div>
+      <p>Consider a Mars rover with 7 states, two actions $a_1, a_2$, rewards $r(\cdot, a_1) = [1, 0, 0, 0, 0, 0, 10]$ and $r(\cdot, a_2) = [0, 0, 0, 0, 0, 0, 5]$, $\gamma = 1$, and $\alpha = 0.5$. Suppose the rover is in state $s_6$, takes $a_1$, receives reward $0$, transitions to $s_7$, then takes $a_2$ receiving reward $5$.</p>
+      <p>With <strong>SARSA</strong>, the update uses the actual next action $a_2$: $Q(s_6, a_1) = 0.5 \cdot 0 + 0.5 \cdot (0 + Q(s_7, a_2)) = 0.5 \cdot 5 = 2.5$.</p>
+      <p>With <strong>Q-learning</strong>, the update uses the max over actions: $Q(s_6, a_1) = 0 + 0.5 \cdot (0 + \max_{a'} Q(s_7, a') - 0) = 0.5 \cdot 10 = 5$.</p>
+      <p>Q-learning gives a higher value because it "assumes" the best action will be taken next, whereas SARSA accounts for the fact that the $\epsilon$-greedy policy sometimes explores suboptimal actions.</p>
+    </div>
+
+    <h3 id="q-convergence">Convergence of Q-Learning</h3>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; Q-Learning Convergence</div>
+      <p>Q-learning for finite-state, finite-action MDPs converges to the optimal action-value function, $Q(s,a) \to Q^*(s,a)$, under two conditions:</p>
+      <ol>
+        <li>The behavior policy sequence $\pi_t(a \mid s)$ satisfies the GLIE condition (all state-action pairs visited infinitely often).</li>
+        <li>The step sizes satisfy the Robbins-Monro conditions:
+          $$\sum_{t=1}^{\infty} \alpha_t = \infty \qquad \text{and} \qquad \sum_{t=1}^{\infty} \alpha_t^2 < \infty$$
+        </li>
+      </ol>
+      <p>For example, $\alpha_t = 1/t$ satisfies these requirements. The convergence proof relies on stochastic approximation theory, the contraction property of the Bellman optimality operator, and bounded rewards.</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="function-approx">Scaling Up: Value Function Approximation</h2>
+
+    <p>Tabular methods maintain a separate value for every state-action pair, which is infeasible when the state space is large or continuous (think of pixel-based observations in Atari, or joint angles of a robot). <strong>Value function approximation (VFA)</strong> replaces the lookup table with a parameterized function $\hat{Q}(s, a; \mathbf{w}) \approx Q^\pi(s, a)$, offering three key advantages:</p>
+
+    <ul>
+      <li><strong>Memory:</strong> a compact parameter vector $\mathbf{w}$ instead of $|\mathcal{S}| \times |\mathcal{A}|$ entries.</li>
+      <li><strong>Computation:</strong> faster updates when the number of parameters is much smaller than the state-action space.</li>
+      <li><strong>Generalization:</strong> updating $\hat{Q}$ at one state-action pair automatically changes estimates at similar states, reducing the experience needed to learn.</li>
+    </ul>
+
+    <h3 id="sgd">Learning with Stochastic Gradient Descent</h3>
+
+    <p>Suppose an oracle could provide the true value $Q^\pi(s,a)$ at any query point. We would minimize the mean-squared error:</p>
+
+    $$J(\mathbf{w}) = \mathbb{E}_\pi \bigl[ (Q^\pi(s,a) - \hat{Q}(s,a;\mathbf{w}))^2 \bigr]$$
+
+    <p>Gradient descent gives the update direction:</p>
+
+    $$\Delta \mathbf{w} = -\frac{1}{2}\alpha\, \nabla_\mathbf{w} J(\mathbf{w}) = \alpha\, \mathbb{E}_\pi \bigl[ (Q^\pi(s,a) - \hat{Q}(s,a;\mathbf{w})) \nabla_\mathbf{w} \hat{Q}(s,a;\mathbf{w}) \bigr]$$
+
+    <p>In practice, we sample transitions and use <strong>stochastic gradient descent (SGD)</strong>, which replaces the expectation with a single-sample estimate. The expected SGD update equals the full gradient, making it an unbiased estimator.</p>
+
+    <h3 id="mc-vfa">Monte Carlo VFA</h3>
+
+    <p>Since the return $G_t$ is an unbiased (but noisy) sample of $Q^\pi(s_t, a_t)$, we substitute it for the true value. MC VFA reduces to supervised learning on state-action/return pairs $\langle (s_1, a_1), G_1 \rangle, \langle (s_2, a_2), G_2 \rangle, \ldots$ with the gradient update:</p>
+
+    $$\Delta \mathbf{w} = \alpha \bigl( G_t - \hat{Q}(s_t, a_t; \mathbf{w}) \bigr) \nabla_\mathbf{w} \hat{Q}(s_t, a_t; \mathbf{w})$$
+
+    <h3 id="td-vfa">TD(0) VFA</h3>
+
+    <p>For TD(0), the target $r + \gamma \hat{V}(s'; \mathbf{w})$ replaces the true value. This introduces three layers of approximation: sampling (single transition instead of expectation), bootstrapping (using $\hat{V}$ instead of true $V^\pi$), and function approximation (parameterized function instead of a table). The update becomes:</p>
+
+    $$\Delta \mathbf{w} = \alpha \bigl( r + \gamma\, \hat{V}(s'; \mathbf{w}) - \hat{V}(s; \mathbf{w}) \bigr) \nabla_\mathbf{w} \hat{V}(s; \mathbf{w})$$
+
+    <p>Note that the gradient is only taken with respect to $\hat{V}(s; \mathbf{w})$, not the target&mdash;this is a <em>semi-gradient</em> method. Despite the theoretical complications this introduces, semi-gradient TD works well in practice with linear function approximation.</p>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="control-vfa">Control with Function Approximation</h2>
+
+    <p>To perform control with VFA, we combine approximate policy evaluation (using MC or TD targets with a parameterized $\hat{Q}$) with $\epsilon$-greedy policy improvement. The update rules for each method generalize naturally:</p>
+
+    <p><strong>MC control:</strong></p>
+    $$\Delta \mathbf{w} = \alpha \bigl( G_t - \hat{Q}(s_t, a_t; \mathbf{w}) \bigr) \nabla_\mathbf{w} \hat{Q}(s_t, a_t; \mathbf{w})$$
+
+    <p><strong>SARSA with VFA:</strong></p>
+    $$\Delta \mathbf{w} = \alpha \bigl( r + \gamma\, \hat{Q}(s', a'; \mathbf{w}) - \hat{Q}(s, a; \mathbf{w}) \bigr) \nabla_\mathbf{w} \hat{Q}(s, a; \mathbf{w})$$
+
+    <p><strong>Q-learning with VFA:</strong></p>
+    $$\Delta \mathbf{w} = \alpha \bigl( r + \gamma \max_{a'} \hat{Q}(s', a'; \mathbf{w}) - \hat{Q}(s, a; \mathbf{w}) \bigr) \nabla_\mathbf{w} \hat{Q}(s, a; \mathbf{w})$$
+
+    <p>However, combining function approximation with control introduces potential instability, particularly when certain conditions coincide.</p>
+
+    <h3 id="deadly-triad">The Deadly Triad</h3>
+
+    <div class="callout insight">
+      <div class="callout-label">Insight &mdash; The Deadly Triad</div>
+      <p>The combination of three individually useful techniques can cause divergence or oscillation in value estimates:</p>
+      <ol>
+        <li><strong>Function approximation</strong> &mdash; representing the value function with a parameterized model rather than a table.</li>
+        <li><strong>Bootstrapping</strong> &mdash; updating estimates based on other estimates (as in TD methods), rather than waiting for complete returns.</li>
+        <li><strong>Off-policy learning</strong> &mdash; learning about one policy while following another (as in Q-learning).</li>
+      </ol>
+      <p>Any two of these three can be combined safely. The danger emerges when all three are present simultaneously. Intuitively, the Bellman backup is a contraction in the tabular case, but projecting the result back onto the function approximation space can be an expansion, causing updates to amplify rather than shrink errors. Off-policy learning exacerbates this because the distribution of states visited under the behavior policy may differ significantly from the distribution relevant to the target policy.</p>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="dqn">Deep Q-Networks (DQN)</h2>
+
+    <p>The 2015 paper "Human-level control through deep reinforcement learning" by Mnih et al. demonstrated that Q-learning with a deep neural network could learn to play Atari games directly from pixels, matching or exceeding human performance in many games. This was a landmark result, but making it work required addressing the two main problems that arise when naively combining neural networks with Q-learning:</p>
+
+    <ul>
+      <li><strong>Correlated samples:</strong> consecutive transitions in an episode are highly correlated, which violates the i.i.d. assumption underlying SGD and can cause learning to diverge.</li>
+      <li><strong>Non-stationary targets:</strong> since the target $r + \gamma \max_{a'} \hat{Q}(s', a'; \mathbf{w})$ depends on the same weights $\mathbf{w}$ being updated, the target shifts with every gradient step, creating a moving-target problem.</li>
+    </ul>
+
+    <p>DQN addresses both issues with two key innovations: <strong>experience replay</strong> and <strong>fixed target networks</strong>.</p>
+
+    <h3 id="experience-replay">Experience Replay</h3>
+
+    <p>Instead of learning only from the most recent transition, DQN stores transitions $(s, a, r, s')$ in a large <strong>replay buffer</strong> $\mathcal{D}$. At each training step, a random minibatch is sampled from $\mathcal{D}$ and used for the gradient update. This breaks temporal correlations (since the minibatch contains transitions from many different episodes and time steps) and dramatically improves data efficiency by reusing each experience many times.</p>
+
+    <h3 id="fixed-targets">Fixed Q-Targets</h3>
+
+    <p>To reduce the non-stationarity of the target, DQN maintains a separate <strong>target network</strong> with parameters $\mathbf{w}^-$ that are held fixed for $C$ update steps. The target becomes:</p>
+
+    $$y_i = r_i + \gamma \max_{a'} \hat{Q}(s_{i+1}, a'; \mathbf{w}^-)$$
+
+    <p>The main network parameters $\mathbf{w}$ are updated to minimize $(y_i - \hat{Q}(s_i, a_i; \mathbf{w}))^2$, while $\mathbf{w}^-$ is only periodically synchronized with $\mathbf{w}$ (every $C$ steps). This provides a stable regression target for many consecutive updates, significantly improving training stability. Note that while this doubles the memory requirements (two copies of the network weights), it does not double computation time since the target network is only used for forward passes, not gradient computation.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Algorithm: Deep Q-Network (DQN)</div>
+      <ol>
+        <li><span class="keyword">Input:</span> target update frequency $C$, learning rate $\alpha$.</li>
+        <li><span class="keyword">Initialize</span> replay buffer $\mathcal{D} = \{\}$, network weights $\mathbf{w}$, target weights $\mathbf{w}^- = \mathbf{w}$, $t = 0$.</li>
+        <li>Get initial state $s_0$.</li>
+        <li><span class="keyword">Loop:</span>
+          <ol>
+            <li>Choose $a_t$ using $\epsilon$-greedy policy w.r.t. $\hat{Q}(s_t, \cdot\,; \mathbf{w})$.</li>
+            <li>Execute $a_t$, observe $(r_t, s_{t+1})$.</li>
+            <li>Store $(s_t, a_t, r_t, s_{t+1})$ in $\mathcal{D}$.</li>
+            <li>Sample random minibatch $\{(s_j, a_j, r_j, s_{j+1})\}$ from $\mathcal{D}$.</li>
+            <li><span class="keyword">For each</span> $(s_j, a_j, r_j, s_{j+1})$ in minibatch:
+              <ol>
+                <li><span class="keyword">If</span> $s_{j+1}$ is terminal: $y_j = r_j$</li>
+                <li><span class="keyword">Else:</span> $y_j = r_j + \gamma \max_{a'} \hat{Q}(s_{j+1}, a'; \mathbf{w}^-)$</li>
+                <li>$\Delta \mathbf{w} = \alpha (y_j - \hat{Q}(s_j, a_j; \mathbf{w})) \nabla_\mathbf{w} \hat{Q}(s_j, a_j; \mathbf{w})$</li>
+              </ol>
+            </li>
+            <li>$t \leftarrow t + 1$.</li>
+            <li><span class="keyword">If</span> $t \bmod C = 0$: $\mathbf{w}^- \leftarrow \mathbf{w}$ <span class="comment">// sync target network</span></li>
+          </ol>
+        </li>
+      </ol>
+    </div>
+
+    <h3 id="dqn-atari">DQN in Practice: Atari Results</h3>
+
+    <p>In the Atari domain, the DQN architecture takes as input a stack of the last 4 raw game frames (pixels), processes them through convolutional layers, and outputs $Q(s, a)$ for each of the 18 possible joystick/button positions. The reward signal is simply the change in game score at each step. Remarkably, the same network architecture and hyperparameters were used across all games.</p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Ablation Study: What Makes DQN Work?</div>
+      <p>Ablation experiments reveal that experience replay is by far the most important ingredient. Comparing average scores across several games:</p>
+      <ul>
+        <li><strong>Linear baseline:</strong> reasonable scores with simple features.</li>
+        <li><strong>Deep network alone (no replay, no fixed targets):</strong> often <em>worse</em> than the linear baseline, demonstrating that simply adding depth does not help and can hurt.</li>
+        <li><strong>DQN with fixed targets only:</strong> moderate improvement over the deep baseline.</li>
+        <li><strong>DQN with replay only:</strong> large improvements (e.g., Breakout jumps from 3 to 241).</li>
+        <li><strong>Full DQN (replay + fixed targets):</strong> best performance (Breakout reaches 317, River Raid reaches 7447).</li>
+      </ul>
+      <p>Beyond decorrelating samples, replay also provides massive data efficiency gains&mdash;each transition is used for many gradient updates instead of just one.</p>
+    </div>
+
+    <h3 id="beyond-dqn">Beyond DQN</h3>
+
+    <p>The success of DQN sparked a wave of improvements to deep Q-learning:</p>
+
+    <ul>
+      <li><strong>Double DQN</strong> (Van Hasselt et al., 2016): addresses the overestimation bias of Q-learning by decoupling action selection from evaluation in the target.</li>
+      <li><strong>Prioritized Experience Replay</strong> (Schaul et al., 2016): samples transitions with high TD error more frequently, focusing learning where it is most needed.</li>
+      <li><strong>Dueling DQN</strong> (Wang et al., 2016): separates the network into a state-value stream and an advantage stream, improving learning when many actions have similar values.</li>
+    </ul>
+
+    <!-- ════════════════════════════════════════════════════════════ -->
+    <h2 id="summary">Summary</h2>
+
+    <p>This lecture covered the full pipeline from model-free evaluation to model-free control, and then scaled these ideas to large state spaces using function approximation.</p>
+
+    <ul>
+      <li><strong>Generalized Policy Iteration (GPI)</strong> alternates evaluation and improvement. Using $Q$ values (rather than $V$) avoids the need for a dynamics model.</li>
+      <li><strong>Epsilon-greedy exploration</strong> ensures all actions are tried while mostly exploiting current knowledge. Under GLIE conditions ($\epsilon \to 0$ at rate $1/k$), MC control converges to $Q^*$.</li>
+      <li><strong>SARSA</strong> is on-policy TD control: it updates $Q(s_t, a_t)$ toward $r_t + \gamma Q(s_{t+1}, a_{t+1})$ using the action actually taken.</li>
+      <li><strong>Q-learning</strong> is off-policy TD control: it updates toward $r_t + \gamma \max_{a'} Q(s_{t+1}, a')$, directly estimating $Q^*$ regardless of the behavior policy.</li>
+      <li><strong>Function approximation</strong> replaces the lookup table with $\hat{Q}(s, a; \mathbf{w})$, enabling generalization across states. SGD-based updates extend naturally from the tabular case.</li>
+      <li>The <strong>deadly triad</strong>&mdash;function approximation + bootstrapping + off-policy learning&mdash;can cause divergence. Care must be taken when all three are present.</li>
+      <li><strong>DQN</strong> stabilizes deep Q-learning through experience replay (breaks sample correlations, improves data efficiency) and fixed target networks (stabilizes the regression target). These innovations enabled human-level Atari play from raw pixels.</li>
+    </ul>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture03.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Model-Free Policy Evaluation</span>
+    </a>
+    <a class="next" href="lecture05.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Policy Gradient I</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\E': '\\mathbb{E}','\\R': '\\mathbb{R}','\\Vpi': 'V^{\\pi}','\\Qpi': 'Q^{\\pi}','\\Vstar': 'V^{*}','\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

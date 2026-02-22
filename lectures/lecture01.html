@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 1: Introduction to RL — CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<!-- Mobile menu -->
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">
+  <span></span>
+</button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+
+<!-- Progress bar -->
+<div class="progress-bar"><div class="bar"></div></div>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer">
+    <a href="../index.html">&larr; All Modules</a>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 1</div>
+    <h2>Introduction to Reinforcement Learning</h2>
+    <p class="lecture-desc">Learning through experience to make good sequential decisions under uncertainty, from core concepts to Markov Reward Processes.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Foundations</span>
+      <span class="lecture-tag">Markov Property</span>
+      <span class="lecture-tag">MRP</span>
+      <span class="lecture-tag">Bellman Equation</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture1pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: What is RL? -->
+    <h2 id="what-is-rl">What Is Reinforcement Learning?</h2>
+
+    <p>At its core, <strong>reinforcement learning (RL)</strong> is about learning through experience and data to make good decisions under uncertainty. Unlike supervised learning, where we are handed labeled input-output pairs, an RL agent must discover which actions yield the most reward by trying them. This trial-and-error paradigm is arguably an essential component of intelligence itself&mdash;humans and animals constantly learn from the consequences of their actions without explicit instruction.</p>
+
+    <p>The field builds on a deep theoretical foundation stretching back to the 1950s, when Richard Bellman introduced the principle of dynamic programming. Over the following decades, ideas from control theory, operations research, and psychology converged into the modern framework we study today. In the last ten years, RL has produced a series of striking successes that have captured both scientific and public attention.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      <strong>Reinforcement Learning.</strong> A computational framework in which an agent learns to make sequential decisions by interacting with an environment, receiving reward signals, and adjusting its behavior to maximize cumulative reward over time.
+    </div>
+
+    <h3 id="recent-successes">Recent Successes</h3>
+
+    <p>Several landmark results illustrate the power and breadth of RL:</p>
+
+    <ul>
+      <li><strong>AlphaGo and AlphaZero</strong> &mdash; DeepMind's systems achieved superhuman performance on the board game Go, a domain with roughly $10^{170}$ possible board positions, far beyond brute-force search. The key ingredient was large-scale RL combined with deep neural networks (Silver et al., <em>Nature</em> 2017).</li>
+      <li><strong>DeepSeek-R1</strong> &mdash; A large language model trained via large-scale reinforcement learning <em>without</em> supervised fine-tuning as a preliminary step, demonstrating remarkable reasoning capabilities and showing that RL alone can unlock sophisticated chain-of-thought behavior.</li>
+      <li><strong>Plasma control for fusion</strong> &mdash; RL was used to control the plasma configuration inside a tokamak reactor, a critical step toward practical nuclear fusion energy (Degrave et al., <em>Nature</em> 2022).</li>
+      <li><strong>COVID-19 border testing</strong> &mdash; An RL-based policy enabled efficient and targeted testing of travelers, allocating scarce testing resources to maximize detection rates (Bastani et al., <em>Nature</em> 2021).</li>
+      <li><strong>ChatGPT and OpenAI o1</strong> &mdash; Reinforcement learning from human feedback (RLHF) is a central technique behind aligning large language models to human preferences. OpenAI's o1 model further uses RL to teach the model "how to think productively" via chain-of-thought reasoning.</li>
+      <li><strong>Mathematical Olympiad</strong> &mdash; Google DeepMind achieved a gold-medal score (35 out of 42 points) at the International Mathematical Olympiad, with solutions described as "astonishing" by the IMO president.</li>
+    </ul>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      RL is particularly powerful in two settings: (1) when no examples of desired behavior exist&mdash;for instance because the goal is to surpass human performance&mdash;and (2) when the problem involves an enormous search space with delayed outcomes, making hand-designed solutions infeasible.
+    </div>
+
+    <!-- Section 2: Four Pillars -->
+    <h2 id="four-pillars">The Four Pillars of Reinforcement Learning</h2>
+
+    <p>What distinguishes RL from other branches of machine learning? Four fundamental challenges arise in virtually every RL problem:</p>
+
+    <h3 id="optimization">Optimization</h3>
+    <p>The goal of RL is to find an optimal (or near-optimal) way to make decisions&mdash;one that yields the best possible outcomes. This requires an explicit notion of utility or objective. A simple analogy is finding the shortest route between two cities given a network of roads: we want to minimize total distance. In RL the objective is typically to maximize cumulative reward. The "Reward is Enough" hypothesis (Silver, Singh, Precup, and Sutton) posits that maximizing reward is a sufficiently generic objective to drive behavior exhibiting most abilities studied in natural and artificial intelligence.</p>
+
+    <h3 id="delayed-consequences">Delayed Consequences</h3>
+    <p>Actions taken now can have impacts far into the future. Saving money for retirement, or finding a key early in a video game like Montezuma's Revenge to unlock a door much later, are both instances of delayed consequences. This introduces two intertwined challenges:</p>
+    <ul>
+      <li><strong>Planning:</strong> Decisions must account not just for immediate benefit but also for long-term ramifications.</li>
+      <li><strong>Temporal credit assignment:</strong> When learning from experience, it is difficult to determine which past decisions were responsible for later success or failure.</li>
+    </ul>
+
+    <h3 id="exploration">Exploration</h3>
+    <p>An RL agent learns about the world by <em>making decisions</em>&mdash;it acts as a scientist running experiments. When you learn to ride a bicycle, you must try (and fall) many times. Crucially, decisions influence what you learn: you only observe the reward for the action you actually took, never for the alternatives you did not try. If you choose to attend Stanford instead of MIT, you experience only the Stanford trajectory. This creates a fundamental tension between <strong>exploration</strong> (trying new things to gather information) and <strong>exploitation</strong> (choosing actions known to yield high reward).</p>
+
+    <h3 id="generalization">Generalization</h3>
+    <p>A policy is a mapping from past experience to action. In principle one could pre-program a lookup table covering every possible situation, but in practice the state space is far too large. The agent must <em>generalize</em> from limited experience to new, previously unseen states&mdash;exactly the kind of challenge that deep learning excels at, which is why the combination of RL and deep neural networks has been so fruitful.</p>
+
+    <!-- Section 3: Sequential Decision Making -->
+    <h2 id="sequential-decision-making">The Sequential Decision-Making Framework</h2>
+
+    <p>Reinforcement learning formalizes decision making as a discrete-time loop between an <strong>agent</strong> and an <strong>environment</strong> (sometimes called "the world"). The goal is to select actions that maximize total expected future reward, which may require carefully balancing immediate and long-term payoffs. This framework applies to a wide range of domains&mdash;web advertising, robot manipulation, medical treatment planning, and more.</p>
+
+    <h3 id="agent-environment-loop">The Agent-Environment Loop</h3>
+
+    <p>At each discrete time step $t$:</p>
+    <ol>
+      <li>The <strong>agent</strong> selects an action $a_t$.</li>
+      <li>The <strong>environment</strong> transitions to a new state based on $a_t$, and emits an observation $o_t$ and a scalar reward $r_t$.</li>
+      <li>The agent receives $o_t$ and $r_t$, and the cycle repeats.</li>
+    </ol>
+
+    <h3 id="history-and-state">History and State</h3>
+
+    <p>The <strong>history</strong> at time $t$ is the complete sequence of past interactions:</p>
+
+    $$h_t = (a_1, o_1, r_1, \ldots, a_t, o_t, r_t)$$
+
+    <p>The agent chooses its next action based on the history. However, maintaining the entire history quickly becomes intractable. Instead, we define a <strong>state</strong> as a compact summary of the history that is sufficient to predict what happens next:</p>
+
+    $$s_t = f(h_t)$$
+
+    <p>The choice of state representation has profound implications for computational complexity, the amount of data required for learning, and the quality of the resulting policy.</p>
+
+    <!-- Section 4: Markov Property -->
+    <h2 id="markov-property">The Markov Property</h2>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      A state $s_t$ is <strong>Markov</strong> if and only if it is a sufficient statistic of the history for predicting the future:
+      $$p(s_{t+1} \mid s_t, a_t) = p(s_{t+1} \mid h_t, a_t)$$
+      In words: the future is independent of the past, given the present state.
+    </div>
+
+    <p>The Markov assumption is popular for several reasons. It is mathematically simple and often can be satisfied by including a small amount of recent history in the state. In practice, a common choice is to set $s_t = o_t$, treating the most recent observation as the state. Different state representations lead to different trade-offs in computational cost, data efficiency, and performance.</p>
+
+    <h3 id="types-of-processes">Types of Sequential Decision Processes</h3>
+
+    <p>Several dimensions characterize different sequential decision problems:</p>
+    <ul>
+      <li><strong>Full vs. partial observability:</strong> Can the agent observe the true state, or only a noisy projection of it? Partially observable settings lead to POMDPs.</li>
+      <li><strong>Deterministic vs. stochastic dynamics:</strong> Does the same action from the same state always lead to the same outcome, or is there randomness?</li>
+      <li><strong>Bandits vs. full RL:</strong> Do actions influence only the immediate reward (the bandit setting), or do they also affect the next state and hence future rewards?</li>
+    </ul>
+
+    <!-- Section 5: MDP Components -->
+    <h2 id="mdp-components">Components of a Markov Decision Process</h2>
+
+    <p>When we combine the Markov assumption with actions and rewards, we arrive at the <strong>Markov Decision Process (MDP)</strong>, the central mathematical framework of this course. An MDP is specified by three core components: a <strong>model</strong>, a <strong>policy</strong>, and a <strong>value function</strong>.</p>
+
+    <h3 id="model">The Model</h3>
+
+    <p>The model is the agent's internal representation of how the world works. It consists of two parts:</p>
+
+    <ul>
+      <li><strong>Transition (dynamics) model:</strong> Predicts the next state given the current state and action:
+        $$p(s_{t+1} = s' \mid s_t = s,\; a_t = a)$$
+      </li>
+      <li><strong>Reward model:</strong> Predicts the expected immediate reward:
+        $$r(s, a) = \mathbb{E}[r_t \mid s_t = s,\; a_t = a]$$
+      </li>
+    </ul>
+
+    <div class="callout example">
+      <div class="callout-label">Example</div>
+      <strong>Mars Rover.</strong> Consider a rover that can occupy one of seven locations $s_1, \ldots, s_7$ along a line. It has two actions: <em>TryLeft</em> and <em>TryRight</em>. The transitions are stochastic&mdash;for instance, $P(s_1 \mid s_1, \text{TryRight}) = 0.5$ and $P(s_2 \mid s_1, \text{TryRight}) = 0.5$. Rewards are $+1$ in state $s_1$, $+10$ in state $s_7$, and $0$ everywhere else. Note that the agent's model may be wrong&mdash;it is only an approximation of the true environment dynamics.
+    </div>
+
+    <h3 id="policy">The Policy</h3>
+
+    <p>A <strong>policy</strong> $\pi$ determines how the agent chooses actions. It can take two forms:</p>
+
+    <ul>
+      <li><strong>Deterministic:</strong> $\pi(s) = a$, mapping each state to a single action.</li>
+      <li><strong>Stochastic:</strong> $\pi(a \mid s) = \Pr(a_t = a \mid s_t = s)$, assigning a probability distribution over actions for each state.</li>
+    </ul>
+
+    <p>For example, a Mars Rover policy might be $\pi(s_1) = \pi(s_2) = \cdots = \pi(s_7) = \text{TryRight}$. Since every state maps to a single action, this is a deterministic policy.</p>
+
+    <h3 id="value-function">The Value Function</h3>
+
+    <p>The <strong>value function</strong> $V^\pi$ quantifies how good it is to be in a given state under a particular policy $\pi$. It is defined as the expected discounted sum of future rewards:</p>
+
+    $$V^\pi(s) = \mathbb{E}_\pi\!\left[r_t + \gamma\, r_{t+1} + \gamma^2\, r_{t+2} + \gamma^3\, r_{t+3} + \cdots \;\middle|\; s_t = s\right]$$
+
+    <p>The discount factor $\gamma$ weighs immediate versus future rewards. The value function can be used to compare policies: if $V^{\pi_1}(s) > V^{\pi_2}(s)$ for all states $s$, then $\pi_1$ is strictly better than $\pi_2$.</p>
+
+    <h3 id="evaluation-and-control">Evaluation and Control</h3>
+
+    <p>Two fundamental tasks arise repeatedly in RL:</p>
+
+    <ul>
+      <li><strong>Evaluation (prediction):</strong> Given a fixed policy $\pi$, estimate the expected rewards from following it&mdash;that is, compute $V^\pi$.</li>
+      <li><strong>Control (optimization):</strong> Find the policy $\pi^*$ that maximizes the value function across all states.</li>
+    </ul>
+
+    <!-- Section 6: Types of RL Agents -->
+    <h2 id="agent-types">Types of RL Agents</h2>
+
+    <p>RL agents can be categorized along two axes based on which components they explicitly maintain:</p>
+
+    <ul>
+      <li><strong>Model-based agents</strong> maintain an explicit model of the environment (transition and reward functions). They may or may not also maintain a policy or value function. Because they can simulate future trajectories using the model, they can plan ahead.</li>
+      <li><strong>Model-free agents</strong> have no explicit model. Instead, they rely directly on a learned value function, a learned policy, or both. They learn entirely from sampled experience without trying to reconstruct the environment dynamics.</li>
+    </ul>
+
+    <p>Orthogonally, agents can be <strong>value-based</strong> (deriving actions from a learned value function), <strong>policy-based</strong> (directly optimizing a parameterized policy), or <strong>actor-critic</strong> (combining both). Understanding this taxonomy is important because it determines which algorithms are applicable and what trade-offs they entail.</p>
+
+    <!-- Section 7: Markov Processes and MRPs -->
+    <h2 id="markov-processes">Markov Processes and Markov Reward Processes</h2>
+
+    <p>Before tackling the full MDP, it is instructive to study simpler structures and build up in complexity. We begin with <strong>Markov processes</strong> (also called Markov chains) and then add rewards to obtain <strong>Markov Reward Processes (MRPs)</strong>.</p>
+
+    <h3 id="markov-chain">Markov Process (Markov Chain)</h3>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      A <strong>Markov Process</strong> is a memoryless random process&mdash;a sequence of random states satisfying the Markov property. It is defined by:
+      <ul>
+        <li>$\mathcal{S}$: a finite set of states ($s \in \mathcal{S}$)</li>
+        <li>$P$: a transition model specifying $P(s_{t+1} = s' \mid s_t = s)$</li>
+      </ul>
+      There are no rewards and no actions.
+    </div>
+
+    <p>When the number of states $N$ is finite, we can represent $P$ as an $N \times N$ transition matrix where entry $(i, j)$ gives $P(s_j \mid s_i)$:</p>
+
+    $$P = \begin{pmatrix} P(s_1|s_1) & P(s_2|s_1) & \cdots & P(s_N|s_1) \\ P(s_1|s_2) & P(s_2|s_2) & \cdots & P(s_N|s_2) \\ \vdots & \vdots & \ddots & \vdots \\ P(s_1|s_N) & P(s_2|s_N) & \cdots & P(s_N|s_N) \end{pmatrix}$$
+
+    <p>Each row sums to 1. Given a starting state, we can sample <strong>episodes</strong>&mdash;trajectories of states generated by repeatedly applying the transition probabilities. For example, starting from $s_4$ in the Mars Rover chain, possible episodes include $s_4, s_5, s_6, s_7, s_7, \ldots$ or $s_4, s_3, s_2, s_1, \ldots$</p>
+
+    <h3 id="mrp">Markov Reward Process (MRP)</h3>
+
+    <p>A Markov Reward Process extends a Markov chain by adding rewards&mdash;but still has no actions.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition</div>
+      A <strong>Markov Reward Process (MRP)</strong> is a tuple $(\mathcal{S}, P, R, \gamma)$ where:
+      <ul>
+        <li>$\mathcal{S}$: a finite set of states</li>
+        <li>$P$: transition model, $P(s_{t+1} = s' \mid s_t = s)$</li>
+        <li>$R$: reward function, $R(s) = \mathbb{E}[r_t \mid s_t = s]$</li>
+        <li>$\gamma \in [0, 1]$: discount factor</li>
+      </ul>
+      With $N$ states, $R$ can be expressed as an $N$-dimensional vector.
+    </div>
+
+    <h3 id="return-and-value">Return and Value Function</h3>
+
+    <p>The <strong>horizon</strong> $H$ is the number of time steps in each episode. It can be finite or infinite. The <strong>return</strong> $G_t$ from time step $t$ is the discounted sum of rewards up to the horizon:</p>
+
+    $$G_t = r_t + \gamma\, r_{t+1} + \gamma^2\, r_{t+2} + \cdots + \gamma^{H-1}\, r_{t+H-1}$$
+
+    <p>The <strong>state value function</strong> for an MRP is the expected return starting from state $s$:</p>
+
+    $$V(s) = \mathbb{E}[G_t \mid s_t = s] = \mathbb{E}\!\left[r_t + \gamma\, r_{t+1} + \gamma^2\, r_{t+2} + \cdots + \gamma^{H-1}\, r_{t+H-1} \;\middle|\; s_t = s\right]$$
+
+    <h3 id="discount-factor">The Discount Factor</h3>
+
+    <p>The discount factor $\gamma$ controls the trade-off between short-term and long-term reward:</p>
+
+    <ul>
+      <li>$\gamma = 0$: The agent is purely myopic&mdash;it cares only about the immediate reward $r_t$. In this case $V(s) = R(s)$.</li>
+      <li>$\gamma = 1$: Future rewards are weighted equally with immediate ones. This is only well-defined when episodes are guaranteed to terminate ($H < \infty$).</li>
+      <li>$0 < \gamma < 1$: Intermediate values create a preference for sooner rewards while still accounting for the future. This is also mathematically convenient because it ensures that the infinite sum converges even when $H = \infty$.</li>
+    </ul>
+
+    <p>Empirically, humans and animals often behave as if they use a discount factor strictly less than 1, preferring immediate gratification over delayed rewards.</p>
+
+    <!-- Section 8: Bellman Equation for MRPs -->
+    <h2 id="bellman-equation-mrp">The Bellman Equation for MRPs</h2>
+
+    <p>The Markov property gives the value function a powerful recursive structure. The value of any state can be decomposed into the immediate reward plus the discounted value of successor states:</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem</div>
+      <strong>Bellman Equation for MRPs.</strong> For any state $s$ in a Markov Reward Process:
+      $$V(s) = \underbrace{R(s)}_{\text{immediate reward}} + \gamma \underbrace{\sum_{s' \in \mathcal{S}} P(s' \mid s)\, V(s')}_{\text{discounted future value}}$$
+    </div>
+
+    <p>This equation is the cornerstone of nearly all RL algorithms. It expresses a consistency condition: the value of a state must equal the immediate reward plus the expected discounted value of the next state.</p>
+
+    <h3 id="matrix-form">Matrix Form and Analytic Solution</h3>
+
+    <p>For a finite-state MRP with $N$ states, the Bellman equation can be written in matrix form. Let $V$ and $R$ be $N$-dimensional column vectors and $P$ the $N \times N$ transition matrix:</p>
+
+    $$V = R + \gamma\, P\, V$$
+
+    <p>Rearranging algebraically:</p>
+
+    $$V - \gamma\, P\, V = R \quad \Longrightarrow \quad (I - \gamma\, P)\, V = R \quad \Longrightarrow \quad V = (I - \gamma\, P)^{-1}\, R$$
+
+    <p>The matrix $(I - \gamma P)$ is always invertible (this can be shown using properties of the spectral radius when $\gamma < 1$). The direct solution requires computing a matrix inverse, which has complexity $O(N^3)$. This is feasible for small state spaces but becomes prohibitive for large ones.</p>
+
+    <h3 id="iterative-computation">Iterative Computation via Dynamic Programming</h3>
+
+    <p>For larger state spaces, we can compute $V$ iteratively rather than inverting a matrix:</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">Dynamic Programming for MRP Value Computation</div>
+      <ol>
+        <li>Initialize $V_0(s) = 0$ for all $s \in \mathcal{S}$.</li>
+        <li>For $k = 1, 2, \ldots$ until convergence:</li>
+        <li style="list-style: none; padding-left: 1.5em;">For all $s \in \mathcal{S}$:
+          $$V_k(s) = R(s) + \gamma \sum_{s' \in \mathcal{S}} P(s' \mid s)\, V_{k-1}(s')$$
+        </li>
+      </ol>
+      <p>Each iteration has complexity $O(|\mathcal{S}|^2)$, since updating one state requires summing over all possible successor states. The iterates $V_k$ converge to the true value function $V$ as $k \to \infty$.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      The Bellman equation transforms a potentially intractable problem&mdash;evaluating an infinite sum of future rewards&mdash;into a set of simultaneous linear equations (for MRPs) or a fixed-point iteration. This recursive decomposition is the single most important structural property exploited by RL algorithms.
+    </div>
+
+    <!-- Section 9: Looking Ahead -->
+    <h2 id="looking-ahead">Looking Ahead</h2>
+
+    <p>This lecture established the conceptual and mathematical foundations of reinforcement learning. We defined the agent-environment interaction loop, introduced the Markov property, and built up from Markov chains to Markov Reward Processes. The Bellman equation for MRPs provides both an analytic solution and an iterative algorithm for computing state values.</p>
+
+    <p>In the next lecture, we will add <strong>actions</strong> to the picture, graduating from MRPs to full <strong>Markov Decision Processes (MDPs)</strong>. We will introduce the Bellman equations for MDPs, define optimal value functions $V^*$ and $Q^*$, and study planning algorithms&mdash;policy evaluation, policy iteration, and value iteration&mdash;that find optimal policies when the model is known.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <!-- No previous for lecture 1 -->
+    <span></span>
+    <a class="next" href="lecture02.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Tabular MDP Planning</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false}
+    ],
+    macros: {
+      '\\\\E': '\\\\mathbb{E}',
+      '\\\\R': '\\\\mathbb{R}',
+      '\\\\Vpi': 'V^{\\\\pi}',
+      '\\\\Qpi': 'Q^{\\\\pi}',
+      '\\\\Vstar': 'V^{*}',
+      '\\\\Qstar': 'Q^{*}'
+    }
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>
