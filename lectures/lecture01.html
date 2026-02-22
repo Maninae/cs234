@@ -72,7 +72,7 @@
 
     <ul>
       <li><strong>AlphaGo and AlphaZero</strong> &mdash; DeepMind's systems achieved superhuman performance on the board game Go, a domain with roughly $10^{170}$ possible board positions, far beyond brute-force search. The key ingredient was large-scale RL combined with deep neural networks (Silver et al., <em>Nature</em> 2017).</li>
-      <li><strong>DeepSeek-R1</strong> &mdash; A large language model trained via large-scale reinforcement learning <em>without</em> supervised fine-tuning as a preliminary step, demonstrating remarkable reasoning capabilities and showing that RL alone can unlock sophisticated chain-of-thought behavior.</li>
+      <li><strong>DeepSeek-R1-Zero</strong> &mdash; A large language model trained via large-scale reinforcement learning <em>without</em> supervised fine-tuning as a preliminary step, demonstrating remarkable reasoning capabilities and showing that RL alone can unlock sophisticated chain-of-thought behavior.</li>
       <li><strong>Plasma control for fusion</strong> &mdash; RL was used to control the plasma configuration inside a tokamak reactor, a critical step toward practical nuclear fusion energy (Degrave et al., <em>Nature</em> 2022).</li>
       <li><strong>COVID-19 border testing</strong> &mdash; An RL-based policy enabled efficient and targeted testing of travelers, allocating scarce testing resources to maximize detection rates (Bastani et al., <em>Nature</em> 2021).</li>
       <li><strong>ChatGPT and OpenAI o1</strong> &mdash; Reinforcement learning from human feedback (RLHF) is a central technique behind aligning large language models to human preferences. OpenAI's o1 model further uses RL to teach the model "how to think productively" via chain-of-thought reasoning.</li>
@@ -90,7 +90,7 @@
     <p>What distinguishes RL from other branches of machine learning? Four fundamental challenges arise in virtually every RL problem:</p>
 
     <h3 id="optimization">Optimization</h3>
-    <p>The goal of RL is to find an optimal (or near-optimal) way to make decisions&mdash;one that yields the best possible outcomes. This requires an explicit notion of utility or objective. A simple analogy is finding the shortest route between two cities given a network of roads: we want to minimize total distance. In RL the objective is typically to maximize cumulative reward. The "Reward is Enough" hypothesis (Silver, Singh, Precup, and Sutton) posits that maximizing reward is a sufficiently generic objective to drive behavior exhibiting most abilities studied in natural and artificial intelligence.</p>
+    <p>The goal of RL is to find an optimal (or near-optimal) way to make decisions&mdash;one that yields the best possible outcomes. This requires an explicit notion of utility or objective. A simple analogy is finding the shortest route between two cities given a network of roads: we want to minimize total distance. In RL the objective is typically to maximize cumulative reward. The "Reward is Enough" hypothesis (Silver, Singh, Precup, and Sutton) posits that maximizing reward is a sufficiently generic objective to drive behavior exhibiting most, if not all, abilities studied in natural and artificial intelligence.</p>
 
     <h3 id="delayed-consequences">Delayed Consequences</h3>
     <p>Actions taken now can have impacts far into the future. Saving money for retirement, or finding a key early in a video game like Montezuma's Revenge to unlock a door much later, are both instances of delayed consequences. This introduces two intertwined challenges:</p>
@@ -155,7 +155,7 @@
     <!-- Section 5: MDP Components -->
     <h2 id="mdp-components">Components of a Markov Decision Process</h2>
 
-    <p>When we combine the Markov assumption with actions and rewards, we arrive at the <strong>Markov Decision Process (MDP)</strong>, the central mathematical framework of this course. An MDP is specified by three core components: a <strong>model</strong>, a <strong>policy</strong>, and a <strong>value function</strong>.</p>
+    <p>When we combine the Markov assumption with actions and rewards, we arrive at the <strong>Markov Decision Process (MDP)</strong>, the central mathematical framework of this course. An RL algorithm often includes one or more of three core components: a <strong>model</strong>, a <strong>policy</strong>, and a <strong>value function</strong>.</p>
 
     <h3 id="model">The Model</h3>
 

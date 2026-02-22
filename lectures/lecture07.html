@@ -93,7 +93,7 @@
 
     <p>The theoretical foundation for trust-region methods comes from bounding the performance difference between two policies. In the previous lecture, we introduced the <strong>surrogate objective</strong>:</p>
 
-    $$L_\pi(\pi') = \frac{1}{1 - \gamma} \mathbb{E}_{\substack{s \sim d^\pi \\ a \sim \pi'}} \!\left[\frac{\pi'(a \mid s)}{\pi(a \mid s)} A^\pi(s, a)\right],$$
+    $$L_\pi(\pi') = \frac{1}{1 - \gamma} \mathbb{E}_{\substack{s \sim d^\pi \\ a \sim \pi}} \!\left[\frac{\pi'(a \mid s)}{\pi(a \mid s)} A^\pi(s, a)\right],$$
 
     <p>which approximates $J(\pi') - J(\pi)$ by using the state visitation distribution $d^\pi$ of the old policy $\pi$ instead of the (unknown) distribution $d^{\pi'}$ of the new policy. This approximation is accurate when $\pi'$ and $\pi$ are close in KL divergence.</p>
 

@@ -142,11 +142,11 @@
     <div class="callout example">
       <div class="callout-label">Example &mdash; Mars Rover MC Evaluation</div>
       <p>
-        Consider a Mars rover MDP with seven states $s_1, \ldots, s_7$ and reward vector $R(s) = [-1, 0, 0, 0, 0, 0, +10]$. Suppose the policy always takes action $a_1$, and we observe the trajectory:
+        Consider a Mars rover MDP with seven states $s_1, \ldots, s_7$ and reward vector $R(s) = [+1, 0, 0, 0, 0, 0, +10]$. Suppose the policy always takes action $a_1$, and we observe the trajectory:
       </p>
-      <p>$$(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, -1,\; \text{terminal})$$</p>
+      <p>$$(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, +1,\; \text{terminal})$$</p>
       <p>
-        With discount $\gamma < 1$, the first-visit MC estimate of $V^\pi(s_2)$ uses only the return from the <em>first</em> visit at time step 2: $G_2 = 0 + \gamma \cdot 0 + \gamma^2 \cdot (-1) = -\gamma^2$. The every-visit estimate additionally incorporates the return from the second visit at time step 3: $G_3 = 0 + \gamma \cdot (-1) = -\gamma$. The every-visit estimate of $V^\pi(s_2)$ is $(-\gamma^2 + (-\gamma)) / 2$.
+        With discount $\gamma < 1$, the first-visit MC estimate of $V^\pi(s_2)$ uses only the return from the <em>first</em> visit at time step 2: $G_2 = 0 + \gamma \cdot 0 + \gamma^2 \cdot (+1) = \gamma^2$. The every-visit estimate additionally incorporates the return from the second visit at time step 3: $G_3 = 0 + \gamma \cdot (+1) = \gamma$. The every-visit estimate of $V^\pi(s_2)$ is $(\gamma^2 + \gamma) / 2$.
       </p>
     </div>
 
@@ -237,10 +237,10 @@
     <div class="callout example">
       <div class="callout-label">Example &mdash; Mars Rover TD(0) Evaluation</div>
       <p>
-        Using the same Mars rover MDP with $R(s) = [-1, 0, 0, 0, 0, 0, +10]$ and trajectory $(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, -1,\; \text{terminal})$, suppose $\gamma = 1$ and $\alpha = 1$ (for simplicity), with all values initialized to zero.
+        Using the same Mars rover MDP with $R(s) = [+1, 0, 0, 0, 0, 0, +10]$ and trajectory $(s_3, a_1, 0,\; s_2, a_1, 0,\; s_2, a_1, 0,\; s_1, a_1, +1,\; \text{terminal})$, suppose $\gamma = 1$ and $\alpha = 1$ (for simplicity), with all values initialized to zero.
       </p>
       <p>
-        The TD updates proceed one transition at a time, right-to-left in the trajectory. After the transition $(s_1, a_1, -1, \text{terminal})$, we get $V(s_1) \leftarrow 0 + 1 \cdot [-1 + 1 \cdot 0 - 0] = -1$. Working backwards through $(s_2, a_1, 0, s_1)$ after $V(s_1)$ has been updated gives $V(s_2) \leftarrow 0 + 1 \cdot [0 + 1 \cdot (-1) - 0] = -1$. But note: TD processes tuples in the <em>order they occur</em>. The first update is $(s_3 \to s_2)$, which gives $V(s_3) \leftarrow 0 + 1 \cdot [0 + 0 - 0] = 0$ since $V(s_2) = 0$ at that point. Information propagates slowly&mdash;one step per update&mdash;unlike MC, which propagates the entire return immediately.
+        The TD updates proceed one transition at a time, right-to-left in the trajectory. After the transition $(s_1, a_1, +1, \text{terminal})$, we get $V(s_1) \leftarrow 0 + 1 \cdot [+1 + 1 \cdot 0 - 0] = +1$. Working backwards through $(s_2, a_1, 0, s_1)$ after $V(s_1)$ has been updated gives $V(s_2) \leftarrow 0 + 1 \cdot [0 + 1 \cdot (+1) - 0] = +1$. But note: TD processes tuples in the <em>order they occur</em>. The first update is $(s_3 \to s_2)$, which gives $V(s_3) \leftarrow 0 + 1 \cdot [0 + 0 - 0] = 0$ since $V(s_2) = 0$ at that point. Information propagates slowly&mdash;one step per update&mdash;unlike MC, which propagates the entire return immediately.
       </p>
     </div>
 

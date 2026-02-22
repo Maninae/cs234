@@ -169,16 +169,19 @@
         <li><span class="keyword">Initialize</span> dataset $\mathcal{D} \leftarrow \emptyset$. Train initial policy $\hat{\pi}_1$ from expert demonstrations.</li>
         <li><span class="keyword">For</span> $n = 1, 2, \ldots, N$:</li>
         <li style="list-style: none; padding-left: 20px;">
-          (a) Execute $\hat{\pi}_n$ in the environment to collect a trajectory of visited states $\{s_1, s_2, \ldots, s_T\}$.
+          (a) Form the mixing policy $\pi_n = \beta_n \, \pi^* + (1 - \beta_n) \, \hat{\pi}_n$, where $\beta_n \to 0$ over iterations.
         </li>
         <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
-          (b) Query the expert $\pi^*$ on these states to obtain labels: $\mathcal{D}_n = \{(s_t, \pi^*(s_t))\}$.
+          (b) Execute $\pi_n$ in the environment to sample $T$-step trajectories and collect visited states $\{s_1, s_2, \ldots, s_T\}$.
         </li>
         <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
-          (c) Aggregate datasets: $\mathcal{D} \leftarrow \mathcal{D} \cup \mathcal{D}_n$.
+          (c) Query the expert $\pi^*$ on these states to obtain labels: $\mathcal{D}_n = \{(s_t, \pi^*(s_t))\}$.
         </li>
         <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
-          (d) Train $\hat{\pi}_{n+1}$ on the full aggregated dataset $\mathcal{D}$.
+          (d) Aggregate datasets: $\mathcal{D} \leftarrow \mathcal{D} \cup \mathcal{D}_n$.
+        </li>
+        <li style="list-style: none; padding-left: 20px; margin-top: 6px;">
+          (e) Train $\hat{\pi}_{n+1}$ on the full aggregated dataset $\mathcal{D}$.
         </li>
       </ol>
       <p class="comment">
