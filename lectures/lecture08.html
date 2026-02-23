@@ -83,8 +83,8 @@
 
     <p>
       Behavioral cloning is appealingly simple: collect demonstrations, train a classifier
-      or regressor, and deploy. However, it harbors a subtle but critical failure mode that
-      arises from the sequential nature of decision-making.
+      or regressor, and deploy. However, it harbors a critical failure mode rooted in
+      the sequential nature of decision-making.
     </p>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -143,9 +143,9 @@
 
     <p>
       <strong>DAgger</strong> (Dataset Aggregation), introduced by Ross, Gordon, and Bagnell
-      (2011), addresses the distribution shift problem head-on. The central idea is simple
-      but powerful: instead of training only on the expert's state distribution, iteratively
-      collect labels on states that the <em>learner</em> actually visits.
+      (2011), addresses the distribution shift problem directly. Instead of training only on
+      the expert's state distribution, it iteratively collects labels on states that the
+      <em>learner</em> actually visits.
     </p>
 
     <div class="callout definition">
@@ -205,12 +205,12 @@
 
     <p>
       DAgger produces a stationary, deterministic policy with provably good performance
-      under its own induced state distribution. The crucial trade-off is that DAgger
-      requires <em>interactive access</em> to the expert: the expert must be available
-      to label new states in each round. This is feasible in some domains (e.g., a
-      simulator where an expert controller can be queried), but may be impractical when
-      the expert is a human who cannot be called upon repeatedly. This limitation
-      motivates alternative approaches that can learn from weaker forms of human feedback.
+      under its own induced state distribution. The trade-off is that it requires
+      <em>interactive access</em> to the expert: the expert must be available to label
+      new states each round. This is feasible when an expert controller can be queried in
+      a simulator, but may be impractical when the expert is a human who cannot be called
+      upon repeatedly. This limitation motivates approaches that learn from weaker forms
+      of human feedback.
     </p>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -221,32 +221,30 @@
     <p>
       In many settings, we want an RL agent whose behavior aligns with human values, but
       we lack an explicit reward function and cannot easily produce expert demonstrations.
-      A compelling alternative is to learn a reward function from <strong>human
-      preferences</strong>&mdash;specifically, from pairwise comparisons. Instead of asking
-      a human "how much do you like this behavior?" (which yields noisy, poorly calibrated
-      scalar ratings), we ask "which of these two behaviors do you prefer?" Pairwise
-      comparisons are often more reliable and easier for humans to provide.
+      A natural alternative is to learn a reward function from <strong>human
+      preferences</strong>: instead of asking "how much do you like this behavior?" (which
+      yields noisy, poorly calibrated scalar ratings), we ask "which of these two behaviors
+      do you prefer?" Pairwise comparisons are more reliable and easier for humans to provide.
     </p>
 
     <p>
-      This approach occupies a sweet spot in the spectrum of human supervision. At one
-      extreme, full demonstrations (behavioral cloning, DAgger) require the expert to
-      show the correct action in every state. At the other extreme, learning with no
-      human input requires a hand-coded reward. Pairwise preference labels sit in between:
-      they require less human effort than constant demonstrations while providing a richer
-      signal than a fixed reward function.
+      This approach occupies a sweet spot between two extremes. Full demonstrations
+      (behavioral cloning, DAgger) require the expert to show the correct action in every
+      state; learning with no human input requires a hand-coded reward. Pairwise preference
+      labels sit in between: less effort than demonstrations, richer signal than a fixed
+      reward function.
     </p>
 
     <h3 id="inverse-rl-ambiguity">The Reward Ambiguity Problem</h3>
 
     <p>
-      Before diving into preference models, it is worth noting a fundamental difficulty
-      with learning rewards from behavior. Given a set of expert demonstrations and knowledge
-      of the transition dynamics, there are infinitely many reward functions that make the
-      expert's policy optimal. This is the core challenge of <strong>inverse reinforcement
-      learning</strong>: the mapping from optimal behavior to reward is one-to-many. For
-      instance, the trivial reward $R(s,a) = 0$ for all $(s,a)$ makes every policy optimal.
-      To obtain a useful reward function, we need additional structure or assumptions.
+      Learning rewards from behavior faces a fundamental difficulty. Given expert
+      demonstrations and the transition dynamics, infinitely many reward functions make
+      the expert's policy optimal&mdash;the mapping from behavior to reward is one-to-many.
+      This is the core challenge of <strong>inverse reinforcement learning</strong>: the
+      trivial reward $R(s,a) = 0$ for all $(s,a)$, for instance, makes every policy
+      optimal. To obtain a useful reward function, we need additional structure or
+      assumptions.
     </p>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -279,8 +277,8 @@
       To fit the parameters of a Bradley-Terry model, suppose we have a dataset
       $\mathcal{D}$ of $N$ tuples $(b_i, b_j, \mu)$ where $\mu = 1$ if the human
       preferred $b_i$, $\mu = 0$ if the human preferred $b_j$, and $\mu = 0.5$
-      for a tie. The reward parameters are learned by maximizing the likelihood of the
-      observed comparisons, which amounts to minimizing the cross-entropy loss:
+      for a tie. The reward parameters are learned by maximizing the likelihood of
+      observed comparisons, equivalently minimizing the cross-entropy loss:
     </p>
 
     $$\mathcal{L}(r) = -\sum_{(b_i, b_j, \mu) \in \mathcal{D}} \left[\mu \log P(b_i \succ b_j) + (1 - \mu) \log P(b_j \succ b_i)\right]$$
@@ -322,11 +320,11 @@
     <h2 id="rlhf">Reinforcement Learning from Human Feedback (RLHF)</h2>
 
     <p>
-      The ideas of reward learning from human preferences have found their most prominent
-      application in <strong>aligning large language models (LLMs)</strong>. The RLHF
-      pipeline, used in systems like InstructGPT and ChatGPT, combines supervised
-      fine-tuning, reward modeling, and reinforcement learning into a coherent training
-      procedure that steers language model outputs toward human preferences.
+      Reward learning from human preferences has found its most prominent application in
+      <strong>aligning large language models (LLMs)</strong>. The RLHF pipeline, used in
+      systems like InstructGPT and ChatGPT, combines supervised fine-tuning, reward
+      modeling, and reinforcement learning to steer language model outputs toward human
+      preferences.
     </p>
 
     <div class="algorithm">
@@ -383,12 +381,11 @@
     </div>
 
     <p>
-      The effectiveness of RLHF has been demonstrated at scale. Stiennon et al. (2020)
-      showed that RLHF significantly improved the quality of text summarization beyond
-      what supervised fine-tuning alone could achieve. Ouyang et al. (2022) scaled the
-      approach to InstructGPT, applying RLHF across tens of thousands of tasks. Notably,
-      a 1.3 billion parameter model fine-tuned with RLHF was preferred by human evaluators
-      over a 175 billion parameter model without RLHF, demonstrating that alignment
+      RLHF has been validated at scale. Stiennon et al. (2020) showed it significantly
+      improves text summarization beyond supervised fine-tuning alone. Ouyang et al. (2022)
+      scaled the approach to InstructGPT across tens of thousands of tasks. Notably, a
+      1.3 billion parameter model fine-tuned with RLHF was preferred by human evaluators
+      over a 175 billion parameter model without it&mdash;demonstrating that alignment
       training can be more impactful than raw scale.
     </p>
 
@@ -399,12 +396,11 @@
 
     <p>
       While RLHF is effective, its three-stage pipeline is complex: it requires training
-      a separate reward model, running an RL algorithm (typically PPO) with all its
-      hyperparameter sensitivity, and managing the interplay between the policy, reward
-      model, and KL constraint. <strong>Direct Preference Optimization (DPO)</strong>,
-      introduced by Rafailov et al. (2023), eliminates the need for both the explicit
-      reward model and the RL optimization loop, collapsing the entire procedure into a
-      single supervised learning objective.
+      a separate reward model, running PPO with all its hyperparameter sensitivity, and
+      managing the interplay between the policy, reward model, and KL constraint.
+      <strong>Direct Preference Optimization (DPO)</strong>, introduced by Rafailov et al.
+      (2023), eliminates both the explicit reward model and the RL loop, collapsing the
+      entire procedure into a single supervised learning objective.
     </p>
 
     <h3 id="dpo-derivation">Deriving DPO from the KL-Constrained Objective</h3>
@@ -416,21 +412,19 @@
     $$\max_\pi \;\mathbb{E}_{y \sim \pi(\cdot \mid x)}\!\left[r(x, y)\right] - \beta\, D_{\text{KL}}\!\left(\pi(\cdot \mid x) \| \pi_{\text{ref}}(\cdot \mid x)\right)$$
 
     <p>
-      This optimization problem has a closed-form solution. The optimal policy
-      $\pi^*$ for this objective can be written analytically as:
+      This objective has a closed-form optimal policy:
     </p>
 
     $$\pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_{\text{ref}}(y \mid x)\, \exp\!\left(\frac{1}{\beta}\, r(x, y)\right)$$
 
     <p>
       where $Z(x) = \sum_y \pi_{\text{ref}}(y \mid x) \exp\!\left(\frac{1}{\beta}\, r(x, y)\right)$ is
-      a normalizing partition function. This closed-form optimal policy is from prior work
-      and is a standard result in KL-regularized RL.
+      a normalizing partition function.
     </p>
 
     <p>
-      The key DPO insight is to <em>rearrange</em> this relationship. Instead of writing
-      the optimal policy as a function of the reward, we write the reward as a function
+      The key DPO insight is to <em>rearrange</em> this relationship: instead of writing
+      the optimal policy as a function of the reward, write the reward as a function
       of the optimal policy. Solving for $r(x, y)$:
     </p>
 
@@ -481,10 +475,9 @@
     <div class="callout insight">
       <div class="callout-label">Why DPO Works</div>
       <p>
-        The DPO loss has an intuitive interpretation. Consider the log-ratio
-        $\log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$: it is positive
-        when the policy assigns higher probability to response $y$ than the reference
-        model does, and negative otherwise. The DPO loss increases this ratio for
+        Consider the log-ratio $\log \frac{\pi_\theta(y \mid x)}{\pi_{\text{ref}}(y \mid x)}$:
+        it is positive when the policy assigns higher probability to response $y$ than the
+        reference model does, and negative otherwise. The DPO loss increases this ratio for
         preferred responses $y_w$ and decreases it for dispreferred responses $y_l$.
       </p>
       <p>
@@ -513,18 +506,18 @@
         ratios. DPO is a single supervised loss.
       </li>
       <li>
-        <strong>Efficiency.</strong> The entire training procedure is a standard
-        cross-entropy-style optimization on the preference dataset, leveraging the same
-        infrastructure used for language model pre-training.
+        <strong>Efficiency.</strong> Training is a standard cross-entropy-style
+        optimization on the preference dataset, using the same infrastructure as
+        language model pre-training.
       </li>
     </ul>
 
     <p>
-      Empirically, DPO achieves competitive or superior performance to PPO-based RLHF on
-      a range of tasks. Experiments on sentiment control using GPT-2 showed that DPO
-      achieves a better trade-off between reward and KL divergence compared to PPO. At
-      larger scale, DPO has been adopted in the training of models such as Mistral and
-      LLaMA 3, demonstrating its viability for production-scale alignment.
+      Empirically, DPO achieves competitive or superior performance to PPO-based RLHF
+      across a range of tasks. On sentiment control with GPT-2, it achieves a better
+      reward/KL trade-off than PPO. At larger scale, DPO has been adopted in models
+      such as Mistral and LLaMA 3, demonstrating its viability for production-scale
+      alignment.
     </p>
 
     <!-- ═══════════════════════════════════════════════════════ -->
@@ -608,11 +601,11 @@
     </ul>
 
     <p>
-      The progression from behavioral cloning through DAgger to RLHF and DPO illustrates
-      a central theme: as we move to weaker forms of human supervision (from full demonstrations
-      to pairwise preferences), we need more sophisticated algorithms to extract a useful
-      training signal. These methods have become foundational in modern AI, powering the
-      alignment of the large language models that underpin today's conversational AI systems.
+      The progression from behavioral cloning through DAgger to RLHF and DPO traces a
+      consistent pattern: as human supervision gets weaker (from full demonstrations to
+      pairwise preferences), the algorithms grow more sophisticated to compensate. These
+      methods have become foundational in modern AI, powering the alignment of the large
+      language models that underpin today's conversational AI systems.
     </p>
 
   </article>

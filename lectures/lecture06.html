@@ -68,7 +68,7 @@
 
     <h3 id="baseline-unbiased">The Baseline Does Not Introduce Bias</h3>
 
-    <p>The remarkable property of baselines is that for <em>any</em> function $b(s)$ that depends only on the state, the expected gradient remains unchanged. This is what makes baselines so powerful: we get variance reduction for free, with no bias penalty.</p>
+    <p>For <em>any</em> function $b(s)$ that depends only on the state, the expected gradient remains unchanged — variance reduction with no bias penalty.</p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem</div>
@@ -100,16 +100,16 @@
 
     $$b^*(s) = \frac{\mathbb{E}_{a \sim \pi(\cdot|s),\, G \mid s, a}\!\left[\|\nabla_\theta \log \pi(a \mid s;\, \theta)\|^2\, G_t(s)\right]}{\mathbb{E}_{a \sim \pi(\cdot|s),\, G \mid s, a}\!\left[\|\nabla_\theta \log \pi(a \mid s;\, \theta)\|^2\right]}$$
 
-    <p>This is a weighted average of returns, where the weights are the squared magnitudes of the score function. In practice, the weights are often approximately constant across actions, so the optimal baseline simplifies to roughly the expected return from state $s$:</p>
+    <p>This is a weighted average of returns, with weights given by the squared score-function magnitudes. In practice those weights are roughly constant across actions, so the optimal baseline simplifies to:</p>
 
     $$b^*(s) \approx \mathbb{E}[G_t \mid s_t = s] = V^\pi(s)$$
 
-    <p>This provides strong motivation for using an estimate of the state value function $V^\pi(s)$ as the baseline&mdash;it is near-optimal and has a clean interpretation.</p>
+    <p>This gives strong motivation for using $V^\pi(s)$ as the baseline — it is near-optimal and has a clean interpretation.</p>
 
     <!-- Section 3: The Advantage Function -->
     <h2 id="advantage-function">The Advantage Function</h2>
 
-    <p>When we use the state-value function $V^\pi(s)$ as the baseline and the state-action value function $Q^\pi(s, a)$ in place of the Monte Carlo return, the quantity that appears in the policy gradient has a name and a deep significance.</p>
+    <p>When we use $V^\pi(s)$ as the baseline and $Q^\pi(s, a)$ in place of the Monte Carlo return, the resulting quantity has a name and a deep significance.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
@@ -132,12 +132,10 @@
     $$Q^\pi(s, a) = \mathbb{E}_\pi\!\left[r_0 + \gamma r_1 + \gamma^2 r_2 + \cdots \mid s_0 = s,\, a_0 = a\right]$$
     $$V^\pi(s) = \mathbb{E}_\pi\!\left[r_0 + \gamma r_1 + \gamma^2 r_2 + \cdots \mid s_0 = s\right] = \mathbb{E}_{a \sim \pi}[Q^\pi(s, a)]$$
 
-    <p>Since $V^\pi(s)$ is the expectation of $Q^\pi(s, a)$ over the policy, the advantage function is naturally centered at zero and captures exactly the relative merit of each action.</p>
-
     <!-- Section 4: Vanilla Policy Gradient with Baseline -->
     <h2 id="vanilla-pg">Vanilla Policy Gradient with Baseline</h2>
 
-    <p>Putting together temporal structure, the baseline, and the advantage function, we arrive at the "vanilla" policy gradient algorithm. This is the practical starting point for most policy gradient implementations.</p>
+    <p>Putting together temporal structure, the baseline, and the advantage function, we arrive at the "vanilla" policy gradient algorithm — the practical starting point for most policy gradient implementations.</p>
 
     <div class="algorithm">
       <div class="algorithm-title">REINFORCE with Baseline</div>
@@ -156,12 +154,12 @@
       </ol>
     </div>
 
-    <p>This algorithm already offers a substantial improvement over bare REINFORCE. However, it still relies on Monte Carlo returns $G_t$, which are high-variance because they depend on the randomness of an entire trajectory from time $t$ onward. Can we do better?</p>
+    <p>This already offers a substantial improvement over bare REINFORCE, but it still relies on Monte Carlo returns $G_t$, which are high-variance because they accumulate randomness over an entire trajectory from time $t$ onward. Can we do better?</p>
 
     <!-- Section 5: Actor-Critic Methods -->
     <h2 id="actor-critic">Actor-Critic Methods</h2>
 
-    <p>The key observation is that the Monte Carlo return $G_t$ is an unbiased but high-variance estimate of $Q^\pi(s_t, a_t)$. Just as temporal-difference (TD) methods offered a lower-variance alternative to MC estimation in value-based RL, we can replace the MC return with a <strong>learned estimate</strong> of the value function. This introduces some bias (from function approximation) but can dramatically reduce variance.</p>
+    <p>The Monte Carlo return $G_t$ is an unbiased but high-variance estimate of $Q^\pi(s_t, a_t)$. Just as TD methods offered a lower-variance alternative to MC estimation in value-based RL, we can replace $G_t$ with a <strong>learned estimate</strong> of the value function. This introduces some bias from function approximation but can dramatically reduce variance.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
@@ -179,11 +177,11 @@
 
     $$\delta_t = r_t + \gamma V_w(s_{t+1}) - V_w(s_t)$$
 
-    <p>This is a biased but low-variance estimate of $A^\pi(s_t, a_t)$. To see why it approximates the advantage, note that if the critic is perfect ($V_w = V^\pi$), then:</p>
+    <p>This is a biased but low-variance estimate of $A^\pi(s_t, a_t)$. When the critic is perfect ($V_w = V^\pi$), the expectation recovers the advantage exactly:</p>
 
     $$\mathbb{E}[\delta_t \mid s_t, a_t] = \mathbb{E}[r_t + \gamma V^\pi(s_{t+1}) \mid s_t, a_t] - V^\pi(s_t) = Q^\pi(s_t, a_t) - V^\pi(s_t) = A^\pi(s_t, a_t)$$
 
-    <p>So the TD error is an unbiased estimate of the advantage when the critic is exact. In practice, function approximation introduces some bias, but the trade-off is usually worthwhile.</p>
+    <p>In practice, function approximation introduces some bias, but the variance reduction is usually worth it.</p>
 
     <div class="algorithm">
       <div class="algorithm-title">Advantage Actor-Critic (A2C)</div>
@@ -222,18 +220,18 @@
 
     <p>Even with baselines and actor-critic enhancements, vanilla policy gradient methods suffer from two fundamental issues:</p>
 
-    <p><strong>Poor sample efficiency.</strong> Policy gradients are inherently <em>on-policy</em>: each batch of trajectory data is used for a single gradient step and then discarded. This is wasteful. The gradient estimate $\hat{g}$ is only valid for the current policy $\pi_\theta$; once $\theta$ changes, the old data no longer provides an unbiased estimate. While importance sampling can in principle reuse old data, the importance weights for entire trajectories tend to vanish or explode:</p>
+    <p><strong>Poor sample efficiency.</strong> Policy gradients are inherently <em>on-policy</em>: each batch of data is used for a single gradient step and then discarded. The gradient estimate $\hat{g}$ is only valid for the current policy $\pi_\theta$; once $\theta$ changes, the old data no longer provides an unbiased estimate. Importance sampling can in principle reuse old data, but the trajectory-level importance weights tend to vanish or explode:</p>
 
     $$\frac{P(\tau_t \mid \theta)}{P(\tau_t \mid \theta')} = \prod_{t'=0}^{t} \frac{\pi_\theta(a_{t'} \mid s_{t'} )}{\pi_{\theta'}(a_{t'} \mid s_{t'})}$$
 
     <p>Even for policies that are only slightly different, many small ratios multiply together to produce extreme values, making the estimator impractical for long horizons.</p>
 
-    <p><strong>Sensitivity to step size.</strong> Policy gradient algorithms perform stochastic gradient ascent: $\theta_{k+1} = \theta_k + \alpha_k \hat{g}_k$. If the step size $\alpha_k$ is too large, performance can <em>collapse</em>&mdash;the policy may enter a region of parameter space from which recovery is difficult. If the step is too small, progress is unacceptably slow. The fundamental issue is that <strong>distance in parameter space does not correspond to distance in policy space</strong>. A small change in $\theta$ can produce a dramatic change in the policy $\pi_\theta$ (for instance, near a sigmoid saturation point), and vice versa.</p>
+    <p><strong>Sensitivity to step size.</strong> Policy gradient algorithms perform stochastic gradient ascent: $\theta_{k+1} = \theta_k + \alpha_k \hat{g}_k$. If $\alpha_k$ is too large, performance can <em>collapse</em> — the policy may enter a region of parameter space from which recovery is difficult. If too small, progress is unacceptably slow. The fundamental issue is that <strong>distance in parameter space does not correspond to distance in policy space</strong>: a small change in $\theta$ can produce a dramatic change in $\pi_\theta$ (near a sigmoid saturation point, for instance), and vice versa.</p>
 
     <!-- Section 7: Policy Performance Bounds -->
     <h2 id="performance-bounds">Policy Performance Bounds</h2>
 
-    <p>To design update rules that respect distance in <em>policy</em> space, we need to understand how the performance of two policies relates. The key result is the <strong>performance difference lemma</strong>.</p>
+    <p>To design update rules that respect distance in <em>policy</em> space, the key tool is the <strong>performance difference lemma</strong>.</p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem</div>
@@ -242,7 +240,7 @@
       where $d^{\pi'}(s) = (1-\gamma)\sum_{t=0}^{\infty} \gamma^t P(s_t = s \mid \pi')$ is the discounted state visitation distribution under $\pi'$.
     </div>
 
-    <p>This result is elegant: the performance difference between $\pi'$ and $\pi$ is expressed entirely in terms of the advantage function of the <em>old</em> policy $\pi$, evaluated on the state-action distribution of the <em>new</em> policy $\pi'$. However, it still requires samples from $\pi'$, which is exactly the policy we are trying to optimize.</p>
+    <p>The performance difference is expressed entirely in terms of the advantage of the <em>old</em> policy $\pi$, evaluated under the state-action distribution of the <em>new</em> policy $\pi'$. The catch: it still requires samples from $\pi'$, which is the policy we are trying to optimize.</p>
 
     <h3 id="surrogate-objective">The Surrogate Objective</h3>
 
@@ -250,20 +248,20 @@
 
     $$L_\pi(\pi') = \frac{1}{1-\gamma}\, \mathbb{E}_{\substack{s \sim d^{\pi} \\ a \sim \pi}}\!\left[\frac{\pi'(a \mid s)}{\pi(a \mid s)}\, A^\pi(s, a)\right]$$
 
-    <p>This quantity can be estimated using trajectories from the old policy $\pi$, because both the state distribution and the sampling distribution are from $\pi$ (the importance weight $\pi'/\pi$ only applies at the action level, not across entire trajectories). How good is this approximation? A formal bound (Achiam et al., 2017) guarantees:</p>
+    <p>This can be estimated from old-policy trajectories: the importance weight $\pi'/\pi$ applies only at the action level, not across entire trajectories. A formal bound (Achiam et al., 2017) guarantees:</p>
 
     $$\left|J(\pi') - J(\pi) - L_\pi(\pi')\right| \leq C\, \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}$$
 
-    <p>for a constant $C$ that depends on the discount factor and the range of the advantage function. The key takeaway is that when $\pi'$ and $\pi$ are close in KL-divergence, the surrogate $L_\pi(\pi')$ is a good approximation to the true performance difference.</p>
+    <p>where $C$ depends on the discount factor and the range of the advantage. When $\pi'$ and $\pi$ are close in KL-divergence, the surrogate $L_\pi(\pi')$ faithfully approximates the true performance difference.</p>
 
     <!-- Section 8: Proximal Policy Optimization -->
     <h2 id="ppo">Proximal Policy Optimization (PPO)</h2>
 
-    <p>The performance bound suggests a natural algorithmic strategy: maximize the surrogate $L_\pi(\pi')$ while constraining the KL-divergence between $\pi'$ and $\pi$ to remain small. <strong>Proximal Policy Optimization (PPO)</strong> implements this idea in two practical variants.</p>
+    <p>The bound suggests a natural strategy: maximize $L_\pi(\pi')$ while keeping the KL-divergence small. <strong>Proximal Policy Optimization (PPO)</strong> implements this in two practical variants.</p>
 
     <h3 id="ppo-kl">Variant 1: Adaptive KL Penalty</h3>
 
-    <p>The first variant solves an unconstrained optimization problem where the KL-divergence is added as a penalty term:</p>
+    <p>The first variant adds KL-divergence as a penalty term in an unconstrained problem:</p>
 
     $$\theta_{k+1} = \arg\max_\theta\; L_{\theta_k}(\theta) - \beta_k\, \bar{D}_{\mathrm{KL}}(\theta \| \theta_k)$$
 
@@ -274,11 +272,11 @@
       <li>If $\bar{D}_{\mathrm{KL}}(\theta_{k+1} \| \theta_k) \leq \delta / 1.5$, the step was conservative: halve $\beta_{k+1} = \beta_k / 2$.</li>
     </ul>
 
-    <p>This adaptive scheme means the initial choice of $\beta_0$ is not critical&mdash;the coefficient quickly adjusts to the appropriate scale.</p>
+    <p>This adaptive scheme means the initial choice of $\beta_0$ is not critical — the coefficient quickly self-calibrates.</p>
 
     <h3 id="ppo-clip">Variant 2: Clipped Objective</h3>
 
-    <p>The second and more popular variant avoids computing KL-divergence altogether. It defines the probability ratio $r_t(\theta) = \pi_\theta(a_t \mid s_t) / \pi_{\theta_k}(a_t \mid s_t)$ and clips it to prevent large policy changes:</p>
+    <p>The second and more popular variant avoids computing KL-divergence entirely. It defines the probability ratio $r_t(\theta) = \pi_\theta(a_t \mid s_t) / \pi_{\theta_k}(a_t \mid s_t)$ and clips it to prevent large policy changes:</p>
 
     $$L_{\theta_k}^{\mathrm{CLIP}}(\theta) = \mathbb{E}_{\tau \sim \pi_k}\!\left[\sum_{t=0}^{T} \min\!\Big(r_t(\theta)\, \hat{A}_t^{\pi_k},\; \mathrm{clip}\big(r_t(\theta),\, 1 - \epsilon,\, 1 + \epsilon\big)\, \hat{A}_t^{\pi_k}\Big)\right]$$
 
@@ -289,7 +287,7 @@
       <li>When $\hat{A}_t < 0$ (the action was worse than expected), $r_t(\theta)$ is clipped from below at $1 - \epsilon$. The objective has no incentive to decrease the probability ratio beyond $1 - \epsilon$.</li>
     </ul>
 
-    <p>In both cases, the minimum operation selects the more pessimistic estimate, preventing the optimization from exploiting large changes in the policy that would take us outside the region where the surrogate objective is trustworthy.</p>
+    <p>In both cases, the minimum selects the more pessimistic estimate, preventing the optimization from exploiting policy changes large enough to invalidate the surrogate objective.</p>
 
     <div class="algorithm">
       <div class="algorithm-title">PPO with Clipped Objective</div>
@@ -318,17 +316,17 @@
     <!-- Section 9: Monotonic Improvement Theory -->
     <h2 id="monotonic-improvement">Monotonic Improvement Theory</h2>
 
-    <p>The surrogate-plus-bound framework leads to a powerful theoretical guarantee. From the performance bound, we know:</p>
+    <p>The surrogate-plus-bound framework leads to a powerful guarantee. From the performance bound:</p>
 
     $$J(\pi') - J(\pi) \geq L_\pi(\pi') - C\, \sqrt{\mathbb{E}_{s \sim d^\pi}\!\left[D_{\mathrm{KL}}(\pi' \| \pi)[s]\right]}$$
 
-    <p>Suppose we define the update rule as:</p>
+    <p>Define the update rule as:</p>
 
     $$\pi_{k+1} = \arg\max_{\pi'}\; L_{\pi_k}(\pi') - C\, \sqrt{\mathbb{E}_{s \sim d^{\pi_k}}\!\left[D_{\mathrm{KL}}(\pi' \| \pi_k)[s]\right]}$$
 
-    <p>Since $\pi_k$ itself is always a feasible point with objective value zero (because $L_{\pi_k}(\pi_k) = 0$ and $D_{\mathrm{KL}}(\pi_k \| \pi_k) = 0$), the optimal value of this maximization must be non-negative. By the performance bound, this implies $J(\pi_{k+1}) - J(\pi_k) \geq 0$. In other words, every update is guaranteed to improve (or at least not degrade) the policy. This is a <strong>monotonic improvement guarantee</strong>.</p>
+    <p>Since $\pi_k$ itself is always a feasible point with objective value zero ($L_{\pi_k}(\pi_k) = 0$ and $D_{\mathrm{KL}}(\pi_k \| \pi_k) = 0$), the optimal value must be non-negative, and the performance bound then gives $J(\pi_{k+1}) - J(\pi_k) \geq 0$. Every update is guaranteed to improve (or at least not degrade) the policy: a <strong>monotonic improvement guarantee</strong>.</p>
 
-    <p>In practice, the constant $C$ from the theory is quite large when $\gamma$ is close to 1, leading to excessively conservative steps. PPO's adaptive KL penalty and clipped objective can be understood as practical approximations to this theoretical update rule, trading off the strict guarantee for larger (and faster) improvement steps.</p>
+    <p>In practice, $C$ is quite large when $\gamma$ is close to 1, making the strict update rule overly conservative. PPO's adaptive KL penalty and clipped objective are best understood as practical approximations that trade the strict guarantee for larger, faster improvement steps.</p>
 
     <!-- Section 10: Looking Ahead -->
     <h2 id="looking-ahead">Looking Ahead</h2>

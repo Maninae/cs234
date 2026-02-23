@@ -57,9 +57,9 @@
     <!-- Section 1: What is RL? -->
     <h2 id="what-is-rl">What Is Reinforcement Learning?</h2>
 
-    <p>At its core, <strong>reinforcement learning (RL)</strong> is about learning through experience and data to make good decisions under uncertainty. Unlike supervised learning, where we are handed labeled input-output pairs, an RL agent must discover which actions yield the most reward by trying them. This trial-and-error paradigm is arguably an essential component of intelligence itself&mdash;humans and animals constantly learn from the consequences of their actions without explicit instruction.</p>
+    <p><strong>Reinforcement learning (RL)</strong> is about learning from experience to make good decisions under uncertainty. Unlike supervised learning, where we get labeled input-output pairs, an RL agent must discover which actions yield the most reward by trying them. Humans and animals do this constantly&mdash;learning from the consequences of their actions without explicit instruction.</p>
 
-    <p>The field builds on a deep theoretical foundation stretching back to the 1950s, when Richard Bellman introduced the principle of dynamic programming. Over the following decades, ideas from control theory, operations research, and psychology converged into the modern framework we study today. In the last ten years, RL has produced a series of striking successes that have captured both scientific and public attention.</p>
+    <p>The field traces back to Richard Bellman's dynamic programming in the 1950s. Over the following decades, ideas from control theory, operations research, and psychology converged into the modern RL framework. In the last ten years, RL has produced a series of striking successes.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
@@ -68,7 +68,7 @@
 
     <h3 id="recent-successes">Recent Successes</h3>
 
-    <p>Several landmark results illustrate the power and breadth of RL:</p>
+    <p>Several landmark results illustrate RL's power and breadth:</p>
 
     <ul>
       <li><strong>AlphaGo and AlphaZero</strong> &mdash; DeepMind's systems achieved superhuman performance on the board game Go, a domain with roughly $10^{170}$ possible board positions, far beyond brute-force search. The key ingredient was large-scale RL combined with deep neural networks (Silver et al., <em>Nature</em> 2017).</li>
@@ -90,7 +90,7 @@
     <p>What distinguishes RL from other branches of machine learning? Four fundamental challenges arise in virtually every RL problem:</p>
 
     <h3 id="optimization">Optimization</h3>
-    <p>The goal of RL is to find an optimal (or near-optimal) way to make decisions&mdash;one that yields the best possible outcomes. This requires an explicit notion of utility or objective. A simple analogy is finding the shortest route between two cities given a network of roads: we want to minimize total distance. In RL the objective is typically to maximize cumulative reward. The "Reward is Enough" hypothesis (Silver, Singh, Precup, and Sutton) posits that maximizing reward is a sufficiently generic objective to drive behavior exhibiting most abilities studied in natural and artificial intelligence.</p>
+    <p>The goal of RL is to find an optimal (or near-optimal) way to make decisions. This requires an explicit objective. A simple analogy: finding the shortest route between two cities in a road network. In RL the objective is typically to maximize cumulative reward. The "Reward is Enough" hypothesis (Silver, Singh, Precup, and Sutton) posits that maximizing reward is a sufficiently generic objective to drive behavior exhibiting most abilities studied in natural and artificial intelligence.</p>
 
     <h3 id="delayed-consequences">Delayed Consequences</h3>
     <p>Actions taken now can have impacts far into the future. Saving money for retirement, or finding a key early in a video game like Montezuma's Revenge to unlock a door much later, are both instances of delayed consequences. This introduces two intertwined challenges:</p>
@@ -100,7 +100,7 @@
     </ul>
 
     <h3 id="exploration">Exploration</h3>
-    <p>An RL agent learns about the world by <em>making decisions</em>&mdash;it acts as a scientist running experiments. When you learn to ride a bicycle, you must try (and fall) many times. Crucially, decisions influence what you learn: you only observe the reward for the action you actually took, never for the alternatives you did not try. If you choose to attend Stanford instead of MIT, you experience only the Stanford trajectory. This creates a fundamental tension between <strong>exploration</strong> (trying new things to gather information) and <strong>exploitation</strong> (choosing actions known to yield high reward).</p>
+    <p>An RL agent learns about the world by <em>making decisions</em>&mdash;acting as a scientist running experiments. When you learn to ride a bicycle, you must try (and fall) many times. Decisions influence what you learn: you only observe the reward for the action you actually took, never for the alternatives you did not try. If you choose to attend Stanford instead of MIT, you experience only the Stanford trajectory. This creates a fundamental tension between <strong>exploration</strong> (trying new things to gather information) and <strong>exploitation</strong> (choosing actions known to yield high reward).</p>
 
     <h3 id="generalization">Generalization</h3>
     <p>A policy is a mapping from past experience to action. In principle one could pre-program a lookup table covering every possible situation, but in practice the state space is far too large. The agent must <em>generalize</em> from limited experience to new, previously unseen states&mdash;exactly the kind of challenge that deep learning excels at, which is why the combination of RL and deep neural networks has been so fruitful.</p>
@@ -108,7 +108,7 @@
     <!-- Section 3: Sequential Decision Making -->
     <h2 id="sequential-decision-making">The Sequential Decision-Making Framework</h2>
 
-    <p>Reinforcement learning formalizes decision making as a discrete-time loop between an <strong>agent</strong> and an <strong>environment</strong> (sometimes called "the world"). The goal is to select actions that maximize total expected future reward, which may require carefully balancing immediate and long-term payoffs. This framework applies to a wide range of domains&mdash;web advertising, robot manipulation, medical treatment planning, and more.</p>
+    <p>RL formalizes decision making as a discrete-time loop between an <strong>agent</strong> and an <strong>environment</strong>. The goal is to select actions that maximize total expected future reward, balancing immediate and long-term payoffs. This framework applies broadly&mdash;web advertising, robot manipulation, medical treatment planning, and more.</p>
 
     <h3 id="agent-environment-loop">The Agent-Environment Loop</h3>
 
@@ -125,7 +125,7 @@
 
     $$h_t = (a_1, o_1, r_1, \ldots, a_t, o_t, r_t)$$
 
-    <p>The agent chooses its next action based on the history. However, maintaining the entire history quickly becomes intractable. Instead, we define a <strong>state</strong> as a compact summary of the history that is sufficient to predict what happens next:</p>
+    <p>The agent chooses its next action based on the history, but maintaining the entire history quickly becomes intractable. Instead, we define a <strong>state</strong> as a compact summary of the history sufficient to predict what happens next:</p>
 
     $$s_t = f(h_t)$$
 
@@ -141,11 +141,11 @@
       In words: the future is independent of the past, given the present state.
     </div>
 
-    <p>The Markov assumption is popular for several reasons. It is mathematically simple and often can be satisfied by including a small amount of recent history in the state. In practice, a common choice is to set $s_t = o_t$, treating the most recent observation as the state. Different state representations lead to different trade-offs in computational cost, data efficiency, and performance.</p>
+    <p>The Markov assumption is mathematically simple and can often be satisfied by including a small amount of recent history in the state. In practice, a common choice is $s_t = o_t$ (the most recent observation). Different state representations lead to different trade-offs in computational cost, data efficiency, and performance.</p>
 
     <h3 id="types-of-processes">Types of Sequential Decision Processes</h3>
 
-    <p>Several dimensions characterize different sequential decision problems:</p>
+    <p>Sequential decision problems vary along several dimensions:</p>
     <ul>
       <li><strong>Full vs. partial observability:</strong> Can the agent observe the true state, or only a noisy projection of it? Partially observable settings lead to POMDPs.</li>
       <li><strong>Deterministic vs. stochastic dynamics:</strong> Does the same action from the same state always lead to the same outcome, or is there randomness?</li>
@@ -213,12 +213,12 @@
       <li><strong>Model-free agents</strong> have no explicit model. Instead, they rely directly on a learned value function, a learned policy, or both. They learn entirely from sampled experience without trying to reconstruct the environment dynamics.</li>
     </ul>
 
-    <p>Orthogonally, agents can be <strong>value-based</strong> (deriving actions from a learned value function), <strong>policy-based</strong> (directly optimizing a parameterized policy), or <strong>actor-critic</strong> (combining both). Understanding this taxonomy is important because it determines which algorithms are applicable and what trade-offs they entail.</p>
+    <p>Orthogonally, agents can be <strong>value-based</strong> (deriving actions from a learned value function), <strong>policy-based</strong> (directly optimizing a parameterized policy), or <strong>actor-critic</strong> (combining both). This taxonomy determines which algorithms apply and what trade-offs they entail.</p>
 
     <!-- Section 7: Markov Processes and MRPs -->
     <h2 id="markov-processes">Markov Processes and Markov Reward Processes</h2>
 
-    <p>Before tackling the full MDP, it is instructive to study simpler structures and build up in complexity. We begin with <strong>Markov processes</strong> (also called Markov chains) and then add rewards to obtain <strong>Markov Reward Processes (MRPs)</strong>.</p>
+    <p>Before tackling the full MDP, we build up in complexity. We begin with <strong>Markov processes</strong> (Markov chains) and then add rewards to obtain <strong>Markov Reward Processes (MRPs)</strong>.</p>
 
     <h3 id="markov-chain">Markov Process (Markov Chain)</h3>
 
@@ -279,7 +279,7 @@
     <!-- Section 8: Bellman Equation for MRPs -->
     <h2 id="bellman-equation-mrp">The Bellman Equation for MRPs</h2>
 
-    <p>The Markov property gives the value function a powerful recursive structure. The value of any state can be decomposed into the immediate reward plus the discounted value of successor states:</p>
+    <p>The Markov property gives the value function a recursive structure: the value of any state decomposes into the immediate reward plus the discounted value of successor states.</p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem</div>
@@ -299,7 +299,7 @@
 
     $$V - \gamma\, P\, V = R \quad \Longrightarrow \quad (I - \gamma\, P)\, V = R \quad \Longrightarrow \quad V = (I - \gamma\, P)^{-1}\, R$$
 
-    <p>The matrix $(I - \gamma P)$ is always invertible (this can be shown using properties of the spectral radius when $\gamma < 1$). The direct solution requires computing a matrix inverse, which has complexity $O(N^3)$. This is feasible for small state spaces but becomes prohibitive for large ones.</p>
+    <p>The matrix $(I - \gamma P)$ is always invertible when $\gamma < 1$ (via spectral radius arguments). The direct solution costs $O(N^3)$&mdash;feasible for small state spaces but prohibitive for large ones.</p>
 
     <h3 id="iterative-computation">Iterative Computation via Dynamic Programming</h3>
 
@@ -325,9 +325,9 @@
     <!-- Section 9: Looking Ahead -->
     <h2 id="looking-ahead">Looking Ahead</h2>
 
-    <p>This lecture established the conceptual and mathematical foundations of reinforcement learning. We defined the agent-environment interaction loop, introduced the Markov property, and built up from Markov chains to Markov Reward Processes. The Bellman equation for MRPs provides both an analytic solution and an iterative algorithm for computing state values.</p>
+    <p>This lecture established the foundations of reinforcement learning: the agent-environment loop, the Markov property, Markov chains, and Markov Reward Processes. The Bellman equation for MRPs gives us both an analytic solution and an iterative algorithm for computing state values.</p>
 
-    <p>In the next lecture, we will add <strong>actions</strong> to the picture, graduating from MRPs to full <strong>Markov Decision Processes (MDPs)</strong>. We will introduce the Bellman equations for MDPs, define optimal value functions $V^*$ and $Q^*$, and study planning algorithms&mdash;policy evaluation, policy iteration, and value iteration&mdash;that find optimal policies when the model is known.</p>
+    <p>Next, we add <strong>actions</strong>, graduating from MRPs to full <strong>Markov Decision Processes (MDPs)</strong>. We will introduce the Bellman equations for MDPs, define optimal value functions $V^*$ and $Q^*$, and study planning algorithms&mdash;policy evaluation, policy iteration, and value iteration&mdash;that find optimal policies when the model is known.</p>
 
   </article>
 

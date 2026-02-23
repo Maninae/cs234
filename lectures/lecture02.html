@@ -54,12 +54,11 @@
     <h2 id="mrp-review">Review: Markov Reward Processes</h2>
 
     <p>
-      Before introducing decisions and actions, we first consolidate the machinery for
-      <strong>Markov Reward Processes (MRPs)</strong> introduced at the end of Lecture 1.
+      Before introducing decisions and actions, we consolidate the machinery for
+      <strong>Markov Reward Processes (MRPs)</strong> from Lecture 1.
       An MRP models an environment where an agent passively receives rewards as it
       transitions between states according to fixed dynamics&mdash;there are no choices to make.
-      Although limited, MRPs are the foundation on which the full decision-making framework
-      of MDPs is built.
+      MRPs are the foundation on which the full MDP framework is built.
     </p>
 
     <h3 id="mrp-return-value">Return and Value Function</h3>
@@ -82,9 +81,9 @@
     <h3 id="mrp-bellman">Bellman Equation for MRPs</h3>
 
     <p>
-      The Markov property grants us a powerful recursive decomposition. The value of a
-      state can be split into the <em>immediate reward</em> plus the <em>discounted value
-      of successor states</em>:
+      The Markov property gives a recursive decomposition: the value of a
+      state splits into the <em>immediate reward</em> plus the <em>discounted value
+      of successor states</em>.
     </p>
 
     <div class="callout theorem">
@@ -503,7 +502,7 @@
     <h2 id="bellman-operators">Bellman Backup Operators</h2>
 
     <p>
-      It is useful to formalize the update rules we have been using as <strong>operators</strong>
+      We can formalize the update rules as <strong>operators</strong>
       that map one value function to another. This abstraction clarifies the relationship
       between policy evaluation, policy iteration, and value iteration.
     </p>
@@ -665,9 +664,8 @@
     </details>
 
     <p>
-      The contraction property has a powerful practical consequence: regardless of how
-      we initialize $V_0$, value iteration will converge to $V^*$. The distance to the
-      fixed point shrinks by a factor of $\gamma$ at each iteration, so after $k$
+      Regardless of how we initialize $V_0$, value iteration converges to $V^*$. The distance to the
+      fixed point shrinks by a factor of $\gamma$ per iteration, so after $k$
       iterations the error is at most $\gamma^k \|V_0 - V^*\|_\infty$. For $\gamma$
       close to 1, convergence is slow; for small $\gamma$, it is fast.
     </p>
@@ -679,8 +677,7 @@
 
     <p>
       Both policy iteration and value iteration converge to the optimal policy, but they
-      take different routes to get there. Understanding their trade-offs is important for
-      choosing the right algorithm in practice.
+      take different routes. Their trade-offs matter for choosing the right algorithm in practice.
     </p>
 
     <p>
@@ -717,8 +714,8 @@
     <h2 id="summary">Summary</h2>
 
     <p>
-      This lecture established the core mathematical framework for sequential decision-making
-      when a model of the world is known. The key concepts and results are:
+      This lecture established the mathematical framework for sequential decision-making
+      when a model is known. The key concepts and results:
     </p>
 
     <ul>
@@ -732,9 +729,8 @@
     </ul>
 
     <p>
-      All of the algorithms presented here require a complete model of the environment
-      (the transition probabilities $P$ and the reward function $R$). In the next lecture,
-      we will address the far more common scenario in real-world RL: how to evaluate a
+      All of the algorithms above require a complete model of the environment
+      ($P$ and $R$). Next, we address the far more common scenario: how to evaluate a
       policy when the model is <em>unknown</em> and the agent must learn from experience.
     </p>
 

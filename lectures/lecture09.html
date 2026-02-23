@@ -48,22 +48,22 @@
     <h2 id="motivation">Why Exploration Matters</h2>
 
     <p>
-      Throughout this course we have studied four fundamental challenges in reinforcement learning: generalization, optimization, delayed outcomes, and exploration. The first three have dominated our attention so far&mdash;we have learned to evaluate and improve policies using dynamic programming, Monte Carlo methods, TD learning, and function approximation. But all of those algorithms assumed, implicitly or explicitly, that the agent would somehow visit all relevant parts of the state-action space often enough to learn. This lecture confronts the fourth challenge head-on: <strong>how should an agent balance exploiting what it currently believes is the best action against exploring alternatives that might turn out to be even better?</strong>
+      Throughout this course we have studied four fundamental challenges in reinforcement learning: generalization, optimization, delayed outcomes, and exploration. The first three have dominated our attention so far&mdash;we have learned to evaluate and improve policies using dynamic programming, Monte Carlo methods, TD learning, and function approximation. But all of those algorithms assumed, implicitly or explicitly, that the agent would somehow visit all relevant parts of the state-action space often enough to learn. This lecture confronts the fourth challenge: <strong>how should an agent balance exploiting what it currently believes is the best action against exploring alternatives that might be better?</strong>
     </p>
 
     <p>
-      This is the <strong>exploration-exploitation dilemma</strong>, and it arises in every setting where an agent must learn and act simultaneously. A doctor prescribing treatments must weigh a drug with a known track record against a newer drug that might be superior. A recommendation system must decide whether to show a user content similar to what they have clicked before or to test novel content that might reveal new preferences. The tension is real: exploring too little risks missing the best option forever, while exploring too much wastes time on clearly inferior choices.
+      This is the <strong>exploration-exploitation dilemma</strong>, and it arises whenever an agent must learn and act at the same time. A doctor prescribing treatments must weigh a drug with a known track record against a newer drug that might be superior. A recommendation system must decide whether to show a user content similar to what they have clicked before or to test novel content that might reveal new preferences. Exploring too little risks missing the best option forever, while exploring too much wastes time on clearly inferior choices.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; Why Exploration Cannot Be Ignored</div>
       <p>
-        Without deliberate exploration, an RL agent can lock onto a suboptimal action permanently. Even if a better action exists, the agent may never discover it because it never tries it&mdash;or tries it too few times to recognize its superiority through the noise of stochastic rewards. Exploration is not a luxury; it is a prerequisite for finding optimal behavior.
+        Without deliberate exploration, an RL agent can lock onto a suboptimal action permanently. It may never try a better action&mdash;or try it too few times to recognize its superiority through the noise of stochastic rewards. Exploration is not a luxury; it is a prerequisite for finding optimal behavior.
       </p>
     </div>
 
     <p>
-      To study exploration in its purest form, we strip away the complications of sequential decision-making&mdash;states, transitions, delayed rewards&mdash;and focus on the simplest possible setting: the <strong>multi-armed bandit</strong>. Bandits isolate the exploration-exploitation tradeoff in a single-step decision problem, making it possible to derive precise theoretical guarantees. The ideas we develop here&mdash;regret, confidence bounds, optimism&mdash;will extend directly to full MDPs in the next lecture.
+      To study exploration in its purest form, we strip away sequential decision-making&mdash;states, transitions, delayed rewards&mdash;and focus on the simplest possible setting: the <strong>multi-armed bandit</strong>. Bandits isolate the exploration-exploitation tradeoff in a single-step decision problem, where precise theoretical guarantees are within reach. The ideas we develop here&mdash;regret, confidence bounds, optimism&mdash;extend directly to full MDPs in the next lecture.
     </p>
 
     <h2 id="mab">The Multi-Armed Bandit Problem</h2>
@@ -83,7 +83,7 @@
     </div>
 
     <p>
-      The name "multi-armed bandit" comes from the image of a gambler facing a row of slot machines (one-armed bandits), each with an unknown payout distribution. The gambler must decide which machines to play to maximize total winnings. The key difficulty is that the reward distributions are unknown&mdash;the agent must learn them through experience while simultaneously trying to accumulate as much reward as possible.
+      The name "multi-armed bandit" comes from the image of a gambler facing a row of slot machines (one-armed bandits), each with an unknown payout distribution. The gambler must decide which machines to play to maximize total winnings&mdash;learning the payouts through experience while trying to accumulate as much reward as possible.
     </p>
 
     <p>
@@ -96,7 +96,7 @@
         Consider a doctor deciding how to treat patients presenting with broken toes. There are three treatment options (arms): (1) surgery, (2) buddy-taping the broken toe to an adjacent toe, and (3) doing nothing. The outcome is binary: the toe has healed after six weeks ($r = +1$) or has not ($r = 0$), as assessed by X-ray.
       </p>
       <p>
-        Each treatment option $a_i$ is modeled as a Bernoulli random variable with unknown parameter $\theta_i$, so $Q(a_i) = \theta_i$. Each patient represents one round of the bandit: the doctor selects a treatment, observes the outcome, and updates their beliefs. A multi-armed bandit is appropriate here because each patient's treatment is a single decision&mdash;there is no sequence of states or transitions to model.
+        Each treatment option $a_i$ is a Bernoulli random variable with unknown parameter $\theta_i$, so $Q(a_i) = \theta_i$. Each patient is one round: the doctor selects a treatment, observes the outcome, and updates their beliefs. A bandit is the right model because each patient's treatment is a single decision&mdash;no states or transitions to worry about.
       </p>
       <p>
         Suppose the true (unknown) parameters are $\theta_1 = 0.95$ (surgery), $\theta_2 = 0.90$ (buddy-taping), and $\theta_3 = 0.10$ (doing nothing). Surgery is optimal, but the doctor does not know this initially. The challenge is to identify the best treatment quickly while minimizing the number of patients who receive suboptimal care.
@@ -106,7 +106,7 @@
     <h2 id="greedy">The Greedy Algorithm and Its Failure</h2>
 
     <p>
-      The simplest approach is to estimate the value of each arm and always select the arm with the highest estimated value. We maintain a running estimate $\hat{Q}_t(a)$ for each arm using Monte Carlo averaging:
+      The simplest idea: estimate the value of each arm and always pick the one with the highest estimate. We maintain a running estimate $\hat{Q}_t(a)$ for each arm via Monte Carlo averaging:
     </p>
 
     <p>$$\hat{Q}_t(a) = \frac{1}{N_t(a)} \sum_{i=1}^{t} r_i \cdot \mathbf{1}(a_i = a)$$</p>
@@ -118,20 +118,20 @@
     <p>$$a_t = \arg\max_{a \in \mathcal{A}} \hat{Q}_{t-1}(a)$$</p>
 
     <p>
-      The problem with greedy is that it can lock onto a suboptimal arm forever. Consider the broken-toe example: suppose we initialize by trying each arm once and observe surgery yields $r = 0$ (which happens with probability 0.05), buddy-taping yields $r = 1$, and doing nothing yields $r = 0$. After this initialization, $\hat{Q}(a_1) = 0$, $\hat{Q}(a_2) = 1$, and $\hat{Q}(a_3) = 0$. The greedy algorithm will select buddy-taping for every subsequent patient. It will never try surgery again, even though surgery is actually the best treatment. The initial bad luck with surgery caused the algorithm to write it off permanently.
+      The problem with greedy is that it can lock onto a suboptimal arm forever. Consider the broken-toe example: suppose we try each arm once and observe surgery yields $r = 0$ (which happens with probability 0.05), buddy-taping yields $r = 1$, and doing nothing yields $r = 0$. Now $\hat{Q}(a_1) = 0$, $\hat{Q}(a_2) = 1$, $\hat{Q}(a_3) = 0$. Greedy selects buddy-taping for every subsequent patient and never tries surgery again, even though surgery is the best treatment. One unlucky early outcome caused the algorithm to write it off permanently.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; Greedy Locks On</div>
       <p>
-        The greedy algorithm can lock onto a suboptimal action forever. Because it never explores alternatives, a single unlucky early outcome can permanently steer the agent away from the truly optimal arm. This is the most basic failure mode of pure exploitation without exploration.
+        Because greedy never explores, a single unlucky early outcome can permanently steer the agent away from the optimal arm. This is the most basic failure mode of pure exploitation.
       </p>
     </div>
 
     <h2 id="regret">Regret: Measuring the Cost of Learning</h2>
 
     <p>
-      To rigorously evaluate bandit algorithms, we need a formal measure of performance. Raw cumulative reward is hard to interpret without knowing what is achievable. Instead, we compare the agent's performance to an <strong>oracle</strong> that always pulls the optimal arm.
+      To evaluate bandit algorithms rigorously, we need a formal performance measure. Raw cumulative reward is hard to interpret without knowing what is achievable, so we compare the agent to an <strong>oracle</strong> that always pulls the optimal arm.
     </p>
 
     <div class="callout definition">
@@ -156,27 +156,27 @@
     <p>$$L_T = \sum_{a \in \mathcal{A}} \mathbb{E}[N_T(a)] \cdot \Delta_a$$</p>
 
     <p>
-      This decomposition is illuminating. A good algorithm must ensure that arms with large gaps (highly suboptimal arms) are pulled infrequently. But the gaps are unknown&mdash;if we knew the gaps, we would know the optimal arm and there would be nothing to learn. The art of bandit algorithm design is finding ways to keep the counts $N_T(a)$ small for large-gap arms without knowing which arms have large gaps.
+      A good algorithm must ensure that arms with large gaps (highly suboptimal arms) are pulled infrequently. But the gaps are unknown&mdash;if we knew them, we would know the optimal arm and there would be nothing to learn. The art of bandit algorithm design is keeping $N_T(a)$ small for large-gap arms without knowing which arms have large gaps.
     </p>
 
     <div class="callout example">
       <div class="callout-label">Example &mdash; Regret of Greedy on Broken Toes</div>
       <p>
-        Continuing the broken-toe scenario where greedy locks onto buddy-taping ($Q(a_2) = 0.90$) after the initialization phase, the per-step regret for each subsequent round is $\Delta_{a_2} = 0.95 - 0.90 = 0.05$. Over $T$ rounds, the total regret grows as approximately $0.05 \cdot T$&mdash;<strong>linear</strong> in $T$. If the greedy algorithm happened to lock onto doing nothing ($Q(a_3) = 0.10$), the per-step regret would be $0.85$, and total regret would grow as $0.85 \cdot T$. In either case, regret grows without bound, proportional to the number of decisions.
+        In the broken-toe scenario where greedy locks onto buddy-taping ($Q(a_2) = 0.90$), the per-step regret is $\Delta_{a_2} = 0.95 - 0.90 = 0.05$, so total regret grows as $0.05 \cdot T$&mdash;<strong>linear</strong> in $T$. If greedy instead locked onto doing nothing ($Q(a_3) = 0.10$), per-step regret would be $0.85$ and total regret $0.85 \cdot T$. Either way, regret grows without bound, proportional to the number of decisions.
       </p>
       <p>
-        Note that in practice we cannot compute regret directly because it requires knowledge of $V^*$, the expected reward of the true best arm. Instead, we prove <em>upper bounds</em> on the regret of an algorithm that hold for any bandit problem.
+        In practice we cannot compute regret directly because it requires knowledge of $V^*$. Instead, we prove <em>upper bounds</em> on an algorithm's regret that hold for any bandit problem.
       </p>
     </div>
 
     <h3 id="regret-types">Types of Regret Bounds</h3>
 
     <p>
-      There are two flavors of regret bounds that appear throughout the bandit literature:
+      Two flavors of regret bounds appear throughout the bandit literature:
     </p>
 
     <ul>
-      <li><strong>Problem-dependent bounds</strong> express regret in terms of the gaps $\Delta_a$. These bounds are tighter when there is a clear best arm (large gaps), reflecting the fact that such problems are easier to solve.</li>
+      <li><strong>Problem-dependent bounds</strong> express regret in terms of the gaps $\Delta_a$. These are tighter when there is a clear best arm (large gaps), since such problems are easier.</li>
       <li><strong>Problem-independent bounds</strong> express regret only as a function of $T$ (the number of rounds) and $K$ (the number of arms), without reference to the specific gaps. These bounds are more general but necessarily looser.</li>
     </ul>
 
@@ -194,14 +194,14 @@
         where $D_{\mathrm{KL}}(\mathcal{R}_a \| \mathcal{R}_{a^*})$ is the Kullback-Leibler divergence between the reward distributions of arm $a$ and the optimal arm $a^*$.
       </p>
       <p>
-        The hardest problems are those where suboptimal arms have reward distributions that are very similar to the optimal arm (small KL divergence), making them difficult to distinguish. The encouraging takeaway is that the lower bound is <strong>sublinear</strong>&mdash;specifically logarithmic&mdash;so there is hope for algorithms that learn efficiently.
+        The hardest problems are those where suboptimal arms have reward distributions very similar to the optimal arm (small KL divergence), making them hard to distinguish. The good news: the lower bound is <strong>sublinear</strong>&mdash;specifically logarithmic&mdash;so algorithms that learn efficiently do exist.
       </p>
     </div>
 
     <h2 id="epsilon-greedy">Epsilon-Greedy: Simple Exploration</h2>
 
     <p>
-      The most straightforward fix for the greedy algorithm's failure is to force exploration by occasionally selecting a random arm. The <strong>$\epsilon$-greedy</strong> algorithm does exactly this: with probability $1 - \epsilon$, it selects the arm with the highest estimated value (exploitation), and with probability $\epsilon$, it selects an arm uniformly at random (exploration).
+      The simplest fix: force exploration by occasionally selecting a random arm. <strong>$\epsilon$-greedy</strong> does exactly this&mdash;with probability $1 - \epsilon$ it picks the arm with the highest estimated value (exploitation), and with probability $\epsilon$ it picks an arm uniformly at random (exploration).
     </p>
 
     <div class="algorithm">
@@ -220,17 +220,17 @@
     </div>
 
     <p>
-      The $\epsilon$-greedy algorithm ensures that every arm is tried infinitely often (so the agent will eventually learn the true values), and it is trivial to implement. However, fixed $\epsilon$-greedy has a significant drawback: <strong>it continues to explore at the same rate forever</strong>, even after the optimal arm has been identified with high confidence.
+      $\epsilon$-greedy ensures every arm is tried infinitely often (so the agent eventually learns the true values), and it is trivial to implement. But fixed $\epsilon$-greedy has a significant drawback: <strong>it explores at the same rate forever</strong>, even after the optimal arm has been identified with high confidence.
     </p>
 
     <p>
-      Consider the broken-toe example with $\epsilon = 0.1$. Even after 10,000 patients, the algorithm still selects a random arm 10% of the time. Since random selection picks each of the three arms with probability $1/3$, the suboptimal arm "doing nothing" ($Q(a_3) = 0.10$) is selected about $0.1 \times 1/3 \approx 3.3\%$ of the time&mdash;far more than necessary. Each such selection incurs a gap of $\Delta_{a_3} = 0.85$.
+      In the broken-toe example with $\epsilon = 0.1$, even after 10,000 patients the algorithm still picks a random arm 10% of the time. "Doing nothing" ($Q(a_3) = 0.10$) gets selected about $0.1 \times 1/3 \approx 3.3\%$ of the time&mdash;far more than necessary&mdash;each pull incurring a gap of $\Delta_{a_3} = 0.85$.
     </p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem &mdash; Linear Regret of Fixed $\epsilon$-Greedy</div>
       <p>
-        For a fixed $\epsilon > 0$, the $\epsilon$-greedy algorithm has <strong>linear total regret</strong>. Specifically, even after the algorithm has identified the optimal arm, it continues to select suboptimal arms a constant fraction $\epsilon$ of the time, so:
+        For fixed $\epsilon > 0$, $\epsilon$-greedy has <strong>linear total regret</strong>. Even after identifying the optimal arm, it continues selecting suboptimal arms a constant fraction $\epsilon$ of the time:
       </p>
       <p>$$L_T = \Omega(\epsilon \cdot T)$$</p>
       <p>
@@ -239,27 +239,27 @@
     </div>
 
     <p>
-      One mitigation is <strong>decaying $\epsilon$-greedy</strong>, where $\epsilon_t$ decreases over time (e.g., $\epsilon_t = 1/t$). As the agent gathers more data and becomes more confident in its estimates, it explores less. With an appropriate decay schedule, decaying $\epsilon$-greedy can achieve sublinear regret. However, the optimal decay schedule typically depends on problem-specific quantities (like the gaps $\Delta_a$) that are unknown, making it difficult to tune in practice.
+      One mitigation is <strong>decaying $\epsilon$-greedy</strong>, where $\epsilon_t$ decreases over time (e.g., $\epsilon_t = 1/t$). As the agent gathers more data, it explores less. With the right decay schedule, this achieves sublinear regret&mdash;but the optimal schedule typically depends on unknown problem-specific quantities (like the gaps $\Delta_a$), making it hard to tune in practice.
     </p>
 
     <h2 id="optimism">Optimism in the Face of Uncertainty</h2>
 
     <p>
-      Can we do better than the brute-force randomness of $\epsilon$-greedy? The answer is yes, and the key idea is one of the most elegant principles in decision-making under uncertainty: <strong>optimism in the face of uncertainty</strong>.
+      Can we do better than brute-force random exploration? Yes&mdash;using one of the most elegant principles in decision-making under uncertainty: <strong>optimism in the face of uncertainty</strong>.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; The Optimism Principle</div>
       <p>
-        When uncertain about the value of an action, assume it is as good as it could plausibly be. Then act greedily with respect to these optimistic estimates. This principle drives exploration automatically: arms that have been tried many times have tight confidence intervals and their optimistic estimate is close to their true value, while arms that have been tried few times have wide confidence intervals and receive a large optimistic bonus. The algorithm naturally gravitates toward under-explored arms.
+        When uncertain about the value of an action, assume it is as good as it could plausibly be, then act greedily on these optimistic estimates. This drives exploration automatically: well-sampled arms have tight confidence intervals and optimistic estimates close to their true value, while under-sampled arms have wide intervals and receive a large optimistic bonus. The algorithm naturally gravitates toward under-explored arms.
       </p>
       <p>
-        There are only two possible outcomes when pulling an optimistically-valued arm: either the arm really does have a high mean reward (so you collect high reward), or it does not (in which case the observed low reward tightens the confidence interval and reduces the optimistic estimate, so the arm will be selected less often in the future). Either way, you win.
+        Only two things can happen when you pull an optimistically-valued arm: either it really does have a high mean reward (and you collect high reward), or it does not (and the observed low reward tightens the confidence interval, so the arm gets selected less often in the future). Either way, you win.
       </p>
     </div>
 
     <p>
-      To implement optimism, we need a way to quantify uncertainty about each arm's value. This is where <strong>concentration inequalities</strong> enter the picture.
+      To implement optimism, we need to quantify uncertainty about each arm's value. This is where <strong>concentration inequalities</strong> come in.
     </p>
 
     <h3 id="confidence-bounds">Confidence Bounds via Concentration Inequalities</h3>
@@ -286,13 +286,13 @@
     <p>$$\mu_a \leq \hat{\mu}_a + \sqrt{\frac{2\sigma^2 \log(1/\delta)}{N_t(a)}}$$</p>
 
     <p>
-      The term $\sqrt{\frac{2\sigma^2 \log(1/\delta)}{N_t(a)}}$ is an <strong>upper confidence bound</strong> (UCB) on the estimation error. It shrinks as $N_t(a)$ grows (more data yields tighter bounds) and grows as $\delta$ decreases (higher confidence requires a wider interval). This gives us exactly the optimistic estimate we need.
+      The term $\sqrt{\frac{2\sigma^2 \log(1/\delta)}{N_t(a)}}$ is an <strong>upper confidence bound</strong> (UCB) on the estimation error. It shrinks as $N_t(a)$ grows (more data, tighter bounds) and grows as $\delta$ decreases (higher confidence, wider interval)&mdash;exactly the optimistic estimate we need.
     </p>
 
     <h2 id="ucb">Upper Confidence Bound (UCB) Algorithm</h2>
 
     <p>
-      The UCB algorithm operationalizes the optimism principle by selecting, at each round, the arm with the highest upper confidence bound on its mean reward:
+      UCB puts the optimism principle into practice: at each round, select the arm with the highest upper confidence bound on its mean reward.
     </p>
 
     <div class="algorithm">
@@ -310,30 +310,30 @@
     </div>
 
     <p>
-      The UCB formula has two terms with clear interpretations. The first term $\hat{Q}_t(a)$ is the <strong>exploitation</strong> component&mdash;the current estimated value of the arm. The second term $\sqrt{2\ln t / N_t(a)}$ is the <strong>exploration bonus</strong>&mdash;it inflates the value of arms that have been pulled infrequently. The bonus is large when $N_t(a)$ is small (the arm is under-explored) and shrinks as the arm is pulled more often. The $\ln t$ in the numerator ensures that even well-explored arms receive a slowly-growing bonus, so no arm is abandoned entirely.
+      The UCB formula has two terms. $\hat{Q}_t(a)$ is the <strong>exploitation</strong> component&mdash;the current estimated value. $\sqrt{2\ln t / N_t(a)}$ is the <strong>exploration bonus</strong>&mdash;large when $N_t(a)$ is small (the arm is under-explored), shrinking as the arm is pulled more often. The $\ln t$ in the numerator ensures that even well-explored arms receive a slowly-growing bonus, so no arm is abandoned entirely.
     </p>
 
     <div class="callout example">
       <div class="callout-label">Example &mdash; UCB on the Broken-Toe Problem</div>
       <p>
-        Returning to the broken-toe scenario with true parameters $\theta_1 = 0.95$, $\theta_2 = 0.90$, $\theta_3 = 0.10$, suppose the initialization phase yields $\hat{Q}(a_1) = 1$, $\hat{Q}(a_2) = 1$, $\hat{Q}(a_3) = 0$ (each arm pulled once).
+        Back to the broken-toe scenario ($\theta_1 = 0.95$, $\theta_2 = 0.90$, $\theta_3 = 0.10$). Suppose initialization yields $\hat{Q}(a_1) = 1$, $\hat{Q}(a_2) = 1$, $\hat{Q}(a_3) = 0$ (each arm pulled once).
       </p>
       <p>
         At $t = 4$ (after the three initialization pulls), the UCB for each arm with $\delta = 1/t$ is:
       </p>
       <p>$$\mathrm{UCB}(a_i) = \hat{Q}(a_i) + \sqrt{\frac{2\ln 4}{1}}$$</p>
       <p>
-        Since each arm has $N(a_i) = 1$, the exploration bonus is identical across arms, so UCB picks the arm with the highest $\hat{Q}$&mdash;either $a_1$ or $a_2$ (tied). Suppose it picks $a_1$ and observes reward 1. Now $N(a_1) = 2$ while $N(a_2) = N(a_3) = 1$, so $a_1$'s exploration bonus is smaller than $a_2$'s, and the algorithm will likely try $a_2$ next. This cycling behavior ensures all arms are explored, but arms with consistently low observed rewards will have their UCB values dragged down and will be selected less and less frequently.
+        Since each arm has $N(a_i) = 1$, the exploration bonus is identical, so UCB picks whichever arm has the highest $\hat{Q}$&mdash;either $a_1$ or $a_2$ (tied). Suppose it picks $a_1$ and observes reward 1. Now $N(a_1) = 2$ while $N(a_2) = N(a_3) = 1$, so $a_1$'s bonus is smaller than $a_2$'s, and the algorithm will likely try $a_2$ next. This cycling ensures all arms are explored, but arms with consistently low rewards have their UCB values dragged down and get selected less and less.
       </p>
       <p>
-        Contrast this with greedy, which might lock onto $a_2$ forever, or $\epsilon$-greedy, which wastes 3.3% of its pulls on the clearly inferior $a_3$. UCB naturally concentrates its pulls on the most promising arms while giving a fair hearing to under-explored alternatives.
+        Contrast this with greedy (locks onto $a_2$ forever) or $\epsilon$-greedy (wastes 3.3% of pulls on the clearly inferior $a_3$). UCB concentrates pulls on the most promising arms while giving a fair hearing to under-explored alternatives.
       </p>
     </div>
 
     <h3 id="ucb-regret">Regret Bound for UCB</h3>
 
     <p>
-      The key result establishing UCB as an efficient bandit algorithm is that it achieves logarithmic regret&mdash;matching the Lai-Robbins lower bound up to constant factors.
+      The key result: UCB achieves logarithmic regret, matching the Lai-Robbins lower bound up to constant factors.
     </p>
 
     <div class="callout theorem">
@@ -347,7 +347,7 @@
       </p>
       <p>$$L_T = O\!\left(\sqrt{KT \log T}\right)$$</p>
       <p>
-        Both bounds are <strong>sublinear</strong> in $T$. The per-step regret $L_T / T$ vanishes as $T$ grows, meaning UCB eventually performs almost as well as the oracle.
+        Both bounds are <strong>sublinear</strong> in $T$: per-step regret $L_T / T$ vanishes as $T$ grows, so UCB eventually performs almost as well as the oracle.
       </p>
     </div>
 
@@ -372,23 +372,23 @@
     <h2 id="choosing-delta">Choosing the Confidence Level</h2>
 
     <p>
-      A subtle technical point in UCB is the choice of $\delta$, the confidence level for the upper confidence bound. Setting $\delta = 1/t$ (which yields the $\ln t$ term in the exploration bonus) is a common and theoretically justified choice. The reasoning uses a <strong>union bound</strong>: we need the UCB to be valid simultaneously across all time steps and all arms. The probability that <em>any</em> arm at <em>any</em> time step has its true mean above its UCB is at most $\sum_t \sum_a \delta = KT\delta$. Setting $\delta = 1/(KT)$ or $\delta = 1/t^2$ ensures this failure probability is negligible.
+      A subtle point is the choice of $\delta$. Setting $\delta = 1/t$ (yielding the $\ln t$ term in the exploration bonus) is common and theoretically justified. The reasoning uses a <strong>union bound</strong>: we need the UCB to hold simultaneously across all time steps and all arms. The probability that <em>any</em> arm at <em>any</em> time has its true mean above its UCB is at most $\sum_t \sum_a \delta = KT\delta$. Setting $\delta = 1/(KT)$ or $\delta = 1/t^2$ makes this failure probability negligible.
     </p>
 
     <p>
-      An alternative that avoids choosing an arm with the highest <em>lower</em> confidence bound might seem reasonable (a "pessimistic" approach), but this does not ensure low regret. Consider a two-arm case where the arms have very similar means. The pessimistic approach would consistently avoid the arm with the lower lower-bound, which might be the optimal arm&mdash;leading to linear regret for the same reason greedy fails.
+      What about choosing the arm with the highest <em>lower</em> confidence bound&mdash;a "pessimistic" approach? This does not ensure low regret. In a two-arm case with similar means, pessimism would consistently avoid the arm with the lower lower-bound, which might be the optimal arm&mdash;leading to linear regret for the same reason greedy fails.
     </p>
 
     <h2 id="beyond-ucb">Looking Ahead: Bayesian Approaches</h2>
 
     <p>
-      UCB is a <em>frequentist</em> approach to bandits: it makes no assumptions about prior distributions over the arm parameters. An alternative is the <strong>Bayesian</strong> approach, where we maintain a posterior distribution over each arm's mean reward and use it to guide exploration. This leads to algorithms such as <strong>Thompson sampling</strong> (probability matching), which at each round samples a reward estimate from the posterior for each arm and selects the arm with the highest sampled value. Thompson sampling achieves Bayesian regret bounds that match or improve upon UCB in many settings, and it has become widely used in practice due to its simplicity and strong empirical performance. This will be explored further in the next lecture.
+      UCB is a <em>frequentist</em> approach: it makes no assumptions about prior distributions over the arm parameters. The <strong>Bayesian</strong> alternative maintains a posterior distribution over each arm's mean reward and uses it to guide exploration. The most prominent example is <strong>Thompson sampling</strong> (probability matching): at each round, sample a reward estimate from the posterior for each arm and select the arm with the highest sample. Thompson sampling achieves Bayesian regret bounds that match or improve upon UCB in many settings, and it has become widely used due to its simplicity and strong empirical performance. We will explore it in the next lecture.
     </p>
 
     <h2 id="summary">Summary</h2>
 
     <p>
-      This lecture introduced the exploration-exploitation dilemma through the lens of the multi-armed bandit problem&mdash;the simplest setting that isolates the fundamental tension between learning and acting. We defined <strong>regret</strong> as the formal measure of an algorithm's performance, quantifying how much cumulative reward is lost compared to an oracle that always selects the optimal arm.
+      This lecture introduced the exploration-exploitation dilemma through the multi-armed bandit&mdash;the simplest setting that isolates the tension between learning and acting. We defined <strong>regret</strong> as the formal performance measure: how much cumulative reward is lost compared to an oracle that always selects the optimal arm.
     </p>
 
     <p>
@@ -396,13 +396,13 @@
     </p>
 
     <ul>
-      <li><strong>Greedy:</strong> Always exploit the current best estimate. Can lock onto a suboptimal arm and suffer <strong>linear regret</strong>.</li>
-      <li><strong>$\epsilon$-Greedy:</strong> Explore uniformly at random with probability $\epsilon$. Guarantees all arms are tried, but with fixed $\epsilon$ it wastes exploration budget on clearly inferior arms and also suffers <strong>linear regret</strong> of order $O(\epsilon T)$.</li>
-      <li><strong>UCB:</strong> Select the arm with the highest upper confidence bound, implementing the <strong>optimism principle</strong>. Automatically balances exploration and exploitation by giving an exploration bonus to under-sampled arms. Achieves <strong>sublinear regret</strong> of $O(\sqrt{KT \log T})$, matching the Lai-Robbins lower bound up to logarithmic factors.</li>
+      <li><strong>Greedy:</strong> Always exploit the current best estimate. Can lock onto a suboptimal arm&mdash;<strong>linear regret</strong>.</li>
+      <li><strong>$\epsilon$-Greedy:</strong> Explore uniformly at random with probability $\epsilon$. Guarantees all arms are tried, but fixed $\epsilon$ wastes pulls on clearly inferior arms&mdash;also <strong>linear regret</strong>, $O(\epsilon T)$.</li>
+      <li><strong>UCB:</strong> Select the arm with the highest upper confidence bound (<strong>optimism principle</strong>). Automatically balances exploration and exploitation via an exploration bonus for under-sampled arms. <strong>Sublinear regret</strong> $O(\sqrt{KT \log T})$, matching Lai-Robbins up to logarithmic factors.</li>
     </ul>
 
     <p>
-      The key ideas from this lecture&mdash;regret as a performance measure, concentration inequalities for constructing confidence bounds, and optimism in the face of uncertainty&mdash;are not limited to bandits. In the next lecture, we will see how these principles extend to the full MDP setting, enabling data-efficient reinforcement learning algorithms that achieve low regret even when the agent must plan over sequences of decisions with delayed rewards.
+      The key ideas&mdash;regret as a performance measure, concentration inequalities for confidence bounds, and optimism in the face of uncertainty&mdash;are not limited to bandits. Next lecture, we will see how they extend to the full MDP setting, enabling data-efficient RL algorithms that achieve low regret even when the agent must plan over sequences of decisions with delayed rewards.
     </p>
 
   </article>

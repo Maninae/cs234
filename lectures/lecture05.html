@@ -48,45 +48,45 @@
     <!-- Section 1: Recap and Motivation -->
     <h2 id="from-values-to-policies">From Value-Based Methods to Policy Search</h2>
 
-    <p>In the preceding lectures, we developed a suite of <strong>value-based</strong> methods for reinforcement learning. Starting from tabular TD and Monte Carlo approaches, we scaled up to function approximation and ultimately to deep Q-networks (DQN). The core idea was always the same: learn an estimate of $Q^\pi(s, a)$ or $V^\pi(s)$, and then extract a policy implicitly&mdash;for example, by acting $\epsilon$-greedily with respect to the learned Q-values. This approach yielded impressive results, including DQN's breakthrough on Atari games (Mnih et al., 2015), but it also revealed fundamental limitations.</p>
+    <p>In the preceding lectures we developed a suite of <strong>value-based</strong> methods for reinforcement learning&mdash;tabular TD, Monte Carlo, function approximation, and deep Q-networks (DQN). The core idea was always the same: learn $Q^\pi(s, a)$ or $V^\pi(s)$, then extract a policy implicitly (e.g., act $\epsilon$-greedily with respect to the learned Q-values). This approach yielded impressive results, including DQN's Atari breakthrough (Mnih et al., 2015), but it also revealed fundamental limitations.</p>
 
-    <p>Recall the <strong>"deadly triad"</strong> of instability that plagues value-based methods when combined with function approximation: (1) <em>bootstrapping</em>, where we use our own value estimates as targets; (2) <em>function approximation</em>, which can magnify errors; and (3) <em>off-policy learning</em> (as in Q-learning), where the data distribution differs from the policy being evaluated. When all three are present simultaneously, convergence is no longer guaranteed, and the system can oscillate or diverge entirely.</p>
+    <p>Recall the <strong>"deadly triad"</strong> that plagues value-based methods with function approximation: (1) <em>bootstrapping</em>, using our own value estimates as targets; (2) <em>function approximation</em>, which can magnify errors; and (3) <em>off-policy learning</em> (as in Q-learning), where the data distribution differs from the policy being evaluated. When all three are present, convergence is no longer guaranteed, and the system can oscillate or diverge.</p>
 
     <h3 id="dqn-recap">DQN: Successes and Stabilizing Tricks</h3>
 
-    <p>Deep Q-Networks addressed two of the most pressing problems with naive Q-learning on neural networks. First, <strong>experience replay</strong> stores past transitions $(s, a, r, s')$ in a replay buffer $D$ and samples random mini-batches for training, breaking the temporal correlations between consecutive samples. Second, <strong>fixed Q-targets</strong> maintain a separate copy of the network weights $w^-$ that are only updated periodically (every $C$ steps), stabilizing the moving target problem. The DQN update takes the form:</p>
+    <p>DQN addressed two pressing problems with naive Q-learning on neural networks. First, <strong>experience replay</strong> stores transitions $(s, a, r, s')$ in a buffer and samples random mini-batches, breaking temporal correlations between consecutive samples. Second, <strong>fixed Q-targets</strong> maintain a separate weight copy $w^-$ updated only every $C$ steps, stabilizing the moving target problem. The DQN update:</p>
 
     $$\Delta w = \alpha \bigl(r + \gamma \max_{a'} \hat{Q}(s', a'; w^-) - \hat{Q}(s, a; w)\bigr) \nabla_w \hat{Q}(s, a; w)$$
 
-    <p>Ablation studies on Atari showed that experience replay was by far the most important ingredient&mdash;it provides a dramatic boost across nearly all games. Fixed Q-targets help further with stability. Nevertheless, DQN and value-based methods in general face structural limitations that motivate a fundamentally different approach.</p>
+    <p>Ablation studies on Atari showed experience replay was by far the most important ingredient&mdash;a dramatic boost across nearly all games. Fixed Q-targets help further with stability. Nevertheless, value-based methods face structural limitations that motivate a fundamentally different approach.</p>
 
     <h3 id="why-policy-search">Why Policy-Based Methods?</h3>
 
-    <p>There are several compelling reasons to search directly over policies rather than learning value functions:</p>
+    <p>Why search directly over policies rather than learning value functions?</p>
 
     <ul>
-      <li><strong>Continuous and high-dimensional action spaces.</strong> Computing $\arg\max_a Q(s, a)$ is straightforward when there are a handful of discrete actions, but becomes an expensive optimization problem in itself when the action space is continuous (e.g., joint torques for a robot). Policy-based methods sidestep this entirely by directly outputting actions.</li>
-      <li><strong>Stochastic policies.</strong> Value-based methods naturally produce near-deterministic policies (greedy or $\epsilon$-greedy). But in some settings, the optimal behavior is inherently stochastic. This arises, for instance, under <em>partial observability</em> (state aliasing), in game-theoretic settings where a mixed strategy is required, or when exploration demands randomness.</li>
-      <li><strong>Simpler representations.</strong> Sometimes the optimal policy has a much simpler structure than the optimal value function. In such cases, directly parameterizing the policy can be more sample-efficient and easier to optimize.</li>
-      <li><strong>Better convergence properties.</strong> Policy gradient methods follow the gradient of a well-defined objective and are guaranteed to converge to at least a local optimum. By contrast, value-based methods with function approximation can oscillate or diverge.</li>
+      <li><strong>Continuous and high-dimensional action spaces.</strong> Computing $\arg\max_a Q(s, a)$ is straightforward with a handful of discrete actions, but becomes an expensive optimization problem when the action space is continuous (e.g., joint torques for a robot). Policy-based methods sidestep this by directly outputting actions.</li>
+      <li><strong>Stochastic policies.</strong> Value-based methods naturally produce near-deterministic policies (greedy or $\epsilon$-greedy), but sometimes the optimal behavior is inherently stochastic&mdash;under <em>partial observability</em> (state aliasing), in game-theoretic settings requiring a mixed strategy, or when exploration demands randomness.</li>
+      <li><strong>Simpler representations.</strong> Sometimes the optimal policy has a much simpler structure than the optimal value function, making direct parameterization more sample-efficient and easier to optimize.</li>
+      <li><strong>Better convergence properties.</strong> Policy gradient methods follow the gradient of a well-defined objective and converge to at least a local optimum. Value-based methods with function approximation can oscillate or diverge.</li>
     </ul>
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
-      <strong>The aliased gridworld.</strong> Consider a gridworld where two distinct states look identical to the agent (they share the same features). An optimal <em>deterministic</em> policy must take the same action in both aliased states&mdash;which can cause the agent to get stuck, bouncing back and forth in a corridor. A <em>stochastic</em> policy, on the other hand, can assign equal probability to going left and right in the aliased states, allowing the agent to escape and reach the goal. Value-based methods produce near-deterministic policies and fail here; policy-based methods can learn the optimal stochastic solution.
+      <strong>The aliased gridworld.</strong> Consider a gridworld where two distinct states look identical to the agent (same features). An optimal <em>deterministic</em> policy must take the same action in both aliased states&mdash;which can trap the agent bouncing back and forth in a corridor. A <em>stochastic</em> policy can assign equal probability to going left and right, letting the agent escape and reach the goal. Value-based methods produce near-deterministic policies and fail here; policy-based methods can learn the optimal stochastic solution.
     </div>
 
     <!-- Section 2: Policy Parameterization -->
     <h2 id="policy-parameterization">Policy Parameterization</h2>
 
-    <p>In policy-based RL, we directly parameterize the policy using a parameter vector $\theta$. The policy $\pi_\theta(a \mid s)$ gives the probability of selecting action $a$ in state $s$. Our goal is to find the parameters $\theta$ that maximize the policy's value.</p>
+    <p>In policy-based RL, we directly parameterize the policy with a vector $\theta$. The policy $\pi_\theta(a \mid s)$ gives the probability of selecting action $a$ in state $s$, and our goal is to find $\theta$ that maximizes the policy's value.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
       <strong>Parameterized Policy.</strong> A stochastic policy $\pi_\theta(a \mid s) = P[a \mid s;\, \theta]$ maps states to probability distributions over actions, where $\theta \in \mathbb{R}^n$ is a tunable parameter vector. We require $\pi_\theta$ to be differentiable with respect to $\theta$ wherever it is non-zero.
     </div>
 
-    <p>This approach stands in contrast to value-based RL, where we parameterized the value function $\hat{Q}_w(s, a)$ and derived the policy indirectly. The taxonomy of RL agents now includes three categories:</p>
+    <p>This contrasts with value-based RL, where we parameterized $\hat{Q}_w(s, a)$ and derived the policy indirectly. The taxonomy of RL agents now has three categories:</p>
 
     <ul>
       <li><strong>Value-based:</strong> Learned value function, implicit policy (e.g., $\epsilon$-greedy).</li>
@@ -96,19 +96,19 @@
 
     <h3 id="softmax-policy">Softmax Policy (Discrete Actions)</h3>
 
-    <p>For problems with discrete action spaces, a natural parameterization is the <strong>softmax policy</strong>. We assign each state-action pair a score via a linear combination of features $\phi(s, a)^\top \theta$, and then convert scores into probabilities using the softmax function:</p>
+    <p>For discrete action spaces, a natural parameterization is the <strong>softmax policy</strong>. Each state-action pair gets a score $\phi(s, a)^\top \theta$, converted to probabilities via softmax:</p>
 
     $$\pi_\theta(s, a) = \frac{e^{\phi(s, a)^\top \theta}}{\sum_{a'} e^{\phi(s, a')^\top \theta}}$$
 
-    <p>The score function (which we will define precisely below) for the softmax policy works out to a particularly elegant form:</p>
+    <p>The score function (defined precisely below) for the softmax policy has an elegant form:</p>
 
     $$\nabla_\theta \log \pi_\theta(s, a) = \phi(s, a) - \mathbb{E}_{\pi_\theta}[\phi(s, \cdot)]$$
 
-    <p>The gradient points in the direction of the features of the chosen action, minus the expected features under the current policy. Intuitively, actions whose features deviate from the average are the ones that get the strongest gradient signal.</p>
+    <p>The gradient points toward the features of the chosen action minus the expected features under the current policy. Actions whose features deviate most from the average get the strongest gradient signal.</p>
 
     <h3 id="gaussian-policy">Gaussian Policy (Continuous Actions)</h3>
 
-    <p>In continuous action spaces, a <strong>Gaussian policy</strong> is the natural choice. The mean of the Gaussian is parameterized as a linear function of state features: $\mu(s) = \phi(s)^\top \theta$, and the variance $\sigma^2$ can be fixed or also learned. Actions are sampled as:</p>
+    <p>In continuous action spaces, a <strong>Gaussian policy</strong> is the natural choice. The mean is a linear function of state features, $\mu(s) = \phi(s)^\top \theta$, and the variance $\sigma^2$ can be fixed or learned. Actions are sampled as:</p>
 
     $$a \sim \mathcal{N}(\mu(s),\, \sigma^2)$$
 
@@ -116,16 +116,16 @@
 
     $$\nabla_\theta \log \pi_\theta(s, a) = \frac{(a - \mu(s))\, \phi(s)}{\sigma^2}$$
 
-    <p>This makes intuitive sense: the gradient is proportional to how far the sampled action deviates from the mean, scaled by the feature vector. If a surprisingly good action was sampled far from the mean, the gradient will push the mean toward that action. Of course, more expressive function approximators such as deep neural networks can also be used to represent the policy&mdash;what matters is that we can compute $\nabla_\theta \log \pi_\theta(a \mid s)$.</p>
+    <p>The gradient is proportional to how far the sampled action deviates from the mean, scaled by the feature vector. If a surprisingly good action was sampled far from the mean, the gradient pushes the mean toward it. More expressive approximators like deep neural networks can also represent the policy&mdash;what matters is that we can compute $\nabla_\theta \log \pi_\theta(a \mid s)$.</p>
 
     <!-- Section 3: The Policy Gradient Objective -->
     <h2 id="objective">The Policy Gradient Objective</h2>
 
-    <p>Policy-based RL is fundamentally an optimization problem. We seek parameters $\theta$ that maximize the <strong>policy value</strong>:</p>
+    <p>Policy-based RL is an optimization problem. We seek $\theta$ that maximizes the <strong>policy value</strong>:</p>
 
     $$J(\theta) = V(s_0, \theta) = \mathbb{E}_{\pi_\theta}\!\left[\sum_{t=0}^{T} R(s_t, a_t) \;\middle|\; \pi_\theta,\, s_0\right]$$
 
-    <p>where the expectation is over the states and actions visited when executing the policy $\pi_\theta$ starting from initial state $s_0$. We can equivalently express this objective as a sum over complete trajectories $\tau = (s_0, a_0, r_0, \ldots, s_{T-1}, a_{T-1}, r_{T-1}, s_T)$:</p>
+    <p>where the expectation is over states and actions visited under $\pi_\theta$ from $s_0$. Equivalently, summing over complete trajectories $\tau = (s_0, a_0, r_0, \ldots, s_{T-1}, a_{T-1}, r_{T-1}, s_T)$:</p>
 
     $$J(\theta) = \sum_{\tau} P(\tau;\, \theta)\, R(\tau) = \mathbb{E}_{\tau \sim \pi_\theta}[R(\tau)]$$
 
@@ -133,12 +133,12 @@
 
     $$\theta \leftarrow \theta + \alpha\, \nabla_\theta J(\theta)$$
 
-    <p>The central question is: how do we compute $\nabla_\theta J(\theta)$? The value depends on $\theta$ through a complex chain of policy choices, stochastic transitions, and accumulated rewards over an entire trajectory. Computing this gradient analytically seems daunting&mdash;but the <em>likelihood ratio trick</em> provides an elegant solution.</p>
+    <p>The central question: how do we compute $\nabla_\theta J(\theta)$? The value depends on $\theta$ through a chain of policy choices, stochastic transitions, and accumulated rewards over an entire trajectory. Computing this gradient analytically seems daunting&mdash;but the <em>likelihood ratio trick</em> provides an elegant solution.</p>
 
     <!-- Section 4: Likelihood Ratio Policy Gradient -->
     <h2 id="likelihood-ratio">The Likelihood Ratio Trick</h2>
 
-    <p>The key mathematical insight behind policy gradients is the <strong>log-derivative trick</strong> (also called the likelihood ratio trick or REINFORCE trick). Starting from the gradient of the objective:</p>
+    <p>The key insight behind policy gradients is the <strong>log-derivative trick</strong> (also called the likelihood ratio trick or REINFORCE trick). Starting from the gradient of the objective:</p>
 
     $$\nabla_\theta J(\theta) = \nabla_\theta \sum_{\tau} P(\tau;\, \theta)\, R(\tau) = \sum_{\tau} \nabla_\theta P(\tau;\, \theta)\, R(\tau)$$
 
@@ -156,12 +156,12 @@
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
-      <strong>Why the log-derivative trick works.</strong> Consider the generic form $\hat{g}_i = f(x_i)\, \nabla_\theta \log p(x_i \mid \theta)$. The quantity $f(x)$ measures how good sample $x$ is. Moving in the direction $\hat{g}_i$ increases the log-probability of the sample in proportion to how good it is. Critically, this estimator is valid even when $f(x)$ is discontinuous or unknown, and even when the sample space is discrete. We never need to differentiate the reward function or the environment dynamics&mdash;only the policy.
+      <strong>Why the log-derivative trick works.</strong> Consider the generic form $\hat{g}_i = f(x_i)\, \nabla_\theta \log p(x_i \mid \theta)$. The quantity $f(x)$ measures how good sample $x$ is. Moving in the direction $\hat{g}_i$ increases the log-probability of the sample in proportion to how good it is. This estimator is valid even when $f(x)$ is discontinuous or unknown, and even when the sample space is discrete. We never need to differentiate the reward function or the dynamics&mdash;only the policy.
     </div>
 
     <h3 id="trajectory-decomposition">Decomposing the Trajectory Probability</h3>
 
-    <p>The next critical step is to decompose $\nabla_\theta \log P(\tau;\, \theta)$ and show that we do not need to know the environment dynamics. The trajectory probability factors as:</p>
+    <p>Next we decompose $\nabla_\theta \log P(\tau;\, \theta)$ and show that we do not need the environment dynamics. The trajectory probability factors as:</p>
 
     $$P(\tau;\, \theta) = \mu(s_0) \prod_{t=0}^{T-1} \pi_\theta(a_t \mid s_t)\, P(s_{t+1} \mid s_t, a_t)$$
 
@@ -169,27 +169,27 @@
 
     $$\nabla_\theta \log P(\tau;\, \theta) = \underbrace{\nabla_\theta \log \mu(s_0)}_{= 0} + \sum_{t=0}^{T-1} \left[\nabla_\theta \log \pi_\theta(a_t \mid s_t) + \underbrace{\nabla_\theta \log P(s_{t+1} \mid s_t, a_t)}_{= 0}\right]$$
 
-    <p>The initial state distribution and the transition dynamics do not depend on $\theta$, so their gradients vanish. We are left with:</p>
+    <p>The initial state distribution and transition dynamics do not depend on $\theta$, so their gradients vanish:</p>
 
     $$\nabla_\theta \log P(\tau;\, \theta) = \sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t)$$
 
-    <p>This is a remarkable result: the gradient of the log-trajectory-probability depends only on the policy, not on the dynamics model. This means policy gradient methods are inherently <strong>model-free</strong>.</p>
+    <p>A remarkable result: the gradient of the log-trajectory-probability depends only on the policy, not on the dynamics model. Policy gradient methods are inherently <strong>model-free</strong>.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
-      <strong>Score Function.</strong> The <em>score function</em> of a parameterized policy is $\nabla_\theta \log \pi_\theta(a \mid s)$. It is the gradient of the log-probability of taking action $a$ in state $s$, and it measures the sensitivity of the policy's log-likelihood to changes in the parameters $\theta$.
+      <strong>Score Function.</strong> The <em>score function</em> of a parameterized policy is $\nabla_\theta \log \pi_\theta(a \mid s)$&mdash;the gradient of the log-probability of taking action $a$ in state $s$. It measures how sensitive the policy's log-likelihood is to changes in $\theta$.
     </div>
 
     <p>Substituting back into our gradient estimate:</p>
 
     $$\nabla_\theta J(\theta) \approx \frac{1}{m} \sum_{i=1}^{m} R(\tau^{(i)}) \sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t^{(i)} \mid s_t^{(i)})$$
 
-    <p>This is the <strong>likelihood ratio policy gradient estimator</strong>. It is unbiased, model-free, and applies to any differentiable policy&mdash;but it can suffer from high variance, which we will address shortly.</p>
+    <p>This is the <strong>likelihood ratio policy gradient estimator</strong>: unbiased, model-free, and applicable to any differentiable policy&mdash;but it can suffer from high variance, which we address shortly.</p>
 
     <!-- Section 5: Policy Gradient Theorem -->
     <h2 id="policy-gradient-theorem">The Policy Gradient Theorem</h2>
 
-    <p>The derivation above was based on the trajectory-level formulation for episodic tasks. The <strong>policy gradient theorem</strong> provides a more general and elegant statement that applies across multiple objective functions.</p>
+    <p>The derivation above used the trajectory-level formulation for episodic tasks. The <strong>policy gradient theorem</strong> gives a more general statement that applies across multiple objective functions.</p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem</div>
@@ -212,7 +212,7 @@
 
         $$\nabla_\theta Q^{\pi_\theta}(s_0, a) = \gamma \sum_{s'} P(s' \mid s_0, a)\, \nabla_\theta V^{\pi_\theta}(s')$$
 
-        <p>Substituting back and "unrolling" the recursion repeatedly introduces a sum over all states weighted by the probability of reaching each state from $s_0$ under $\pi_\theta$. Defining the (unnormalized) discounted state visitation frequency $d^{\pi_\theta}(s) = \sum_{t=0}^{T-1} \gamma^t P(s_t = s \mid s_0, \pi_\theta)$, the result telescopes to:</p>
+        <p>Substituting and unrolling the recursion introduces a sum over all states weighted by the probability of reaching each from $s_0$ under $\pi_\theta$. Defining the (unnormalized) discounted state visitation frequency $d^{\pi_\theta}(s) = \sum_{t=0}^{T-1} \gamma^t P(s_t = s \mid s_0, \pi_\theta)$, the result telescopes to:</p>
 
         $$\nabla_\theta J(\theta) = \sum_s d^{\pi_\theta}(s) \sum_a \nabla_\theta \pi_\theta(a \mid s)\, Q^{\pi_\theta}(s, a)$$
 
@@ -222,18 +222,18 @@
       </div>
     </details>
 
-    <p>The beauty of this theorem is that the gradient depends on $Q^{\pi_\theta}$, the action-value function of the current policy. We do not need access to the environment dynamics&mdash;only samples generated by the policy itself.</p>
+    <p>The gradient depends on $Q^{\pi_\theta}$, the action-value function of the current policy&mdash;no access to environment dynamics is needed, only samples generated by the policy itself.</p>
 
     <!-- Section 6: Temporal Structure and REINFORCE -->
     <h2 id="reinforce">Exploiting Temporal Structure: REINFORCE</h2>
 
-    <p>The basic likelihood ratio estimator weights the entire trajectory return $R(\tau)$ by the sum of all score functions along that trajectory. This means that the reward received at time $t=0$ is used to evaluate the gradient of the log-policy at time $t=T-1$, even though a past reward cannot possibly be influenced by a future action. This introduces unnecessary variance.</p>
+    <p>The basic likelihood ratio estimator weights the entire trajectory return $R(\tau)$ by the sum of all score functions along the trajectory. This means the reward at $t=0$ influences the gradient at $t=T-1$, even though a past reward cannot be affected by a future action&mdash;introducing unnecessary variance.</p>
 
-    <p>We can do better by exploiting the causal, temporal structure of the problem. The gradient of the expected reward at a single time step $t'$ depends only on the policy choices up to time $t'$:</p>
+    <p>We can do better by exploiting causal structure. The gradient of the expected reward at time step $t'$ depends only on policy choices up to $t'$:</p>
 
     $$\nabla_\theta \mathbb{E}[r_{t'}] = \mathbb{E}\!\left[r_{t'} \sum_{t=0}^{t'} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\right]$$
 
-    <p>Summing over all time steps and rearranging, we can swap the order of summation to associate each policy gradient at time $t$ with only the <em>future</em> rewards from time $t$ onward:</p>
+    <p>Summing over all time steps and swapping the order of summation, each policy gradient at time $t$ gets paired with only <em>future</em> rewards from $t$ onward:</p>
 
     $$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t) \sum_{t'=t}^{T-1} r_{t'}\right] = \mathbb{E}\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]$$
 
@@ -254,16 +254,16 @@
       </ol>
     </div>
 
-    <p>REINFORCE is conceptually simple: roll out complete episodes, and for each action taken, nudge the policy parameters in the direction that increases the log-probability of that action, scaled by how much total future reward followed. Good actions (with high $G_t$) get reinforced; poor actions get suppressed. The estimator is <strong>unbiased</strong> but can have <strong>high variance</strong>, since $G_t$ is a single Monte Carlo sample of the expected return.</p>
+    <p>REINFORCE is conceptually simple: roll out complete episodes, and for each action, nudge the parameters to increase its log-probability in proportion to the future reward that followed. Good actions (high $G_t$) get reinforced; poor actions get suppressed. The estimator is <strong>unbiased</strong> but can have <strong>high variance</strong>, since $G_t$ is a single Monte Carlo sample of the expected return.</p>
 
     <!-- Section 7: Baselines for Variance Reduction -->
     <h2 id="baselines">Variance Reduction with Baselines</h2>
 
-    <p>The raw REINFORCE estimator, while unbiased, can be very noisy in practice. A powerful technique for reducing variance without introducing bias is to subtract a <strong>baseline</strong> $b(s)$ from the return:</p>
+    <p>The raw REINFORCE estimator, while unbiased, can be very noisy. A powerful technique for reducing variance without introducing bias is to subtract a <strong>baseline</strong> $b(s)$ from the return:</p>
 
     $$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t) \left(G_t - b(s_t)\right)\right]$$
 
-    <p>The key theoretical result is that <em>any</em> baseline that depends only on the state (and not on the action) leaves the gradient unbiased.</p>
+    <p><em>Any</em> baseline that depends only on the state (not on the action) leaves the gradient unbiased.</p>
 
     <details class="proof">
       <summary>Proof: Baselines Do Not Introduce Bias</summary>
@@ -284,7 +284,7 @@
 
     $$b(s_t) \approx \mathbb{E}[G_t \mid s_t] = V^{\pi_\theta}(s_t)$$
 
-    <p>The intuition is compelling: by subtracting the baseline, we convert the return into an <strong>advantage</strong>&mdash;measuring how much <em>better</em> (or worse) the chosen action turned out compared to the average performance from that state. Actions that produce above-average returns get reinforced; actions that produce below-average returns get suppressed. This eliminates the problem where all returns are positive (or all negative), which would push all log-probabilities in the same direction regardless of action quality.</p>
+    <p>By subtracting the baseline, we convert the return into an <strong>advantage</strong>&mdash;how much <em>better</em> (or worse) the chosen action turned out compared to average performance from that state. Above-average actions get reinforced; below-average actions get suppressed. This eliminates the problem where all returns are positive (or all negative), pushing all log-probabilities in the same direction regardless of action quality.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition</div>
@@ -318,7 +318,7 @@
     <!-- Section 9: Actor-Critic and N-step Estimators -->
     <h2 id="actor-critic-preview">Toward Actor-Critic Methods</h2>
 
-    <p>In the vanilla algorithm above, we used the Monte Carlo return $G_t$ as our estimate of $Q^{\pi_\theta}(s_t, a_t)$. This is unbiased but high-variance, since it depends on the entire stochastic future of a single trajectory. Just as we saw with TD versus MC methods for value estimation, we can trade off bias for variance by introducing <strong>bootstrapping</strong>: using a learned value function to estimate part of the return.</p>
+    <p>In the vanilla algorithm above, we used the Monte Carlo return $G_t$ as our estimate of $Q^{\pi_\theta}(s_t, a_t)$&mdash;unbiased but high-variance, since it depends on the entire stochastic future of a single trajectory. Just as with TD versus MC for value estimation, we can trade bias for variance by introducing <strong>bootstrapping</strong>: using a learned value function to estimate part of the return.</p>
 
     <p>The general policy gradient estimator is:</p>
 
@@ -332,19 +332,19 @@
       <li><strong>$\infty$-step (MC):</strong> $\hat{A}_t^{(\infty)} = G_t - V_w(s_t)$</li>
     </ul>
 
-    <p>The 1-step estimator has low variance (it uses only one step of actual rewards) but high bias (it relies heavily on the accuracy of $V_w$). The $\infty$-step (Monte Carlo) estimator has zero bias but high variance. Intermediate values of $n$ provide a smooth trade-off between these extremes.</p>
+    <p>The 1-step estimator has low variance but high bias (it relies heavily on $V_w$'s accuracy). The $\infty$-step (MC) estimator has zero bias but high variance. Intermediate $n$ provides a smooth trade-off.</p>
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
       <strong>The bias-variance knob.</strong> The choice of $n$ in the $n$-step estimator controls a fundamental trade-off. Short-horizon estimates ($n=1$) bootstrap aggressively, producing low-variance but potentially biased gradient estimates. Long-horizon estimates ($n = \infty$) use Monte Carlo returns, which are unbiased but noisy. In practice, intermediate values or weighted blends (like GAE/$\lambda$-returns) often work best.
     </div>
 
-    <p>When we explicitly maintain both a parameterized policy $\pi_\theta$ (the <em>actor</em>) and a parameterized value function $V_w$ (the <em>critic</em>), we enter the domain of <strong>actor-critic methods</strong>. The critic evaluates the current policy by estimating $V^{\pi_\theta}$, and the actor improves the policy using the critic's estimates in the gradient. Popular algorithms like A3C (Mnih et al., ICML 2016) follow this paradigm.</p>
+    <p>When we maintain both a parameterized policy $\pi_\theta$ (the <em>actor</em>) and a parameterized value function $V_w$ (the <em>critic</em>), we have an <strong>actor-critic method</strong>. The critic estimates $V^{\pi_\theta}$; the actor improves the policy using the critic's estimates in the gradient. Popular algorithms like A3C (Mnih et al., ICML 2016) follow this paradigm.</p>
 
     <!-- Section 10: Summary -->
     <h2 id="summary">Summary and Looking Ahead</h2>
 
-    <p>This lecture introduced a fundamentally different paradigm for reinforcement learning: instead of learning a value function and deriving a policy, we directly parameterize and optimize the policy. The key concepts introduced are:</p>
+    <p>This lecture introduced a different paradigm for reinforcement learning: instead of learning a value function and deriving a policy, we directly parameterize and optimize the policy. Key concepts:</p>
 
     <ul>
       <li><strong>Policy parameterization:</strong> Representing $\pi_\theta(a \mid s)$ using softmax (discrete) or Gaussian (continuous) parameterizations, or deep neural networks.</li>
@@ -355,7 +355,7 @@
       <li><strong>Baselines and advantage estimation:</strong> Subtracting a state-dependent baseline $b(s)$ from the return reduces variance without introducing bias. The value function $V^{\pi_\theta}(s)$ is a natural and near-optimal baseline.</li>
     </ul>
 
-    <p>Policy gradient methods are widely used in practice, forming the backbone of algorithms such as REINFORCE, PPO (Proximal Policy Optimization), and TRPO (Trust Region Policy Optimization). They have been applied to training robotic locomotion policies, game-playing agents, and&mdash;perhaps most prominently&mdash;aligning large language models through RLHF. In the next lecture, we will delve deeper into actor-critic architectures, trust region methods, and advanced variance reduction techniques that make policy gradients practical at scale.</p>
+    <p>Policy gradient methods form the backbone of algorithms like REINFORCE, PPO (Proximal Policy Optimization), and TRPO (Trust Region Policy Optimization). They have been applied to robotic locomotion, game-playing agents, and&mdash;perhaps most prominently&mdash;aligning large language models through RLHF. In the next lecture, we will explore actor-critic architectures, trust region methods, and advanced variance reduction techniques that make policy gradients practical at scale.</p>
 
   </article>
 
