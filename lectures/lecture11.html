@@ -48,43 +48,43 @@
     <!-- Section 1: Motivation and Setup -->
     <h2 id="from-frequentist-to-bayesian">From Frequentist to Bayesian Bandits</h2>
 
-    <p>In the previous lecture, we studied the multi-armed bandit problem from a <strong>frequentist</strong> perspective. We made minimal assumptions about the reward distributions&mdash;only that rewards are bounded&mdash;and derived algorithms like Upper Confidence Bound (UCB) that achieve sublinear regret by applying the principle of <em>optimism in the face of uncertainty</em>. The UCB approach constructs confidence intervals around estimated mean rewards and selects the arm with the highest upper confidence bound, guaranteeing $O(\sqrt{KT \ln T})$ regret without any prior knowledge about the reward distributions.</p>
+    <p>In the previous lecture, we studied multi-armed bandits from a <strong>frequentist</strong> perspective. We assumed only that rewards are bounded, and derived Upper Confidence Bound (UCB)&mdash;an algorithm that constructs confidence intervals around estimated means, picks the arm with the highest upper bound, and guarantees $O(\sqrt{KT \ln T})$ regret without any prior knowledge.</p>
 
-    <p>But what if we <em>do</em> have prior knowledge? In many practical settings&mdash;clinical trials, online advertising, recommendation systems&mdash;we often have domain expertise or historical data that gives us beliefs about the likely reward rates of different actions before we begin the experiment. The <strong>Bayesian approach</strong> to bandits provides a principled framework for incorporating such prior information: we maintain a full probability distribution over the unknown parameters of each arm's reward distribution, and update these beliefs as we observe new data.</p>
+    <p>But what if we <em>do</em> have prior knowledge? In clinical trials, online advertising, and recommendation systems, we often have domain expertise or historical data that gives us beliefs about reward rates before we begin. The <strong>Bayesian approach</strong> provides a principled framework for incorporating this information: maintain a full probability distribution over each arm's unknown parameters, and update those beliefs as data arrives.</p>
 
-    <p>Recall the multi-armed bandit setup. We have a tuple $(\mathcal{A}, R)$ where $\mathcal{A}$ is a known set of $K$ actions (arms), and $R_a(r) = P[r \mid a]$ is an unknown probability distribution over rewards for each arm $a$. At each step $t$, the agent selects an action $a_t \in \mathcal{A}$, observes a reward $r_t \sim R_{a_t}$, and aims to maximize cumulative reward $\sum_{\tau=1}^{T} r_\tau$&mdash;or equivalently, minimize total regret:</p>
+    <p>Recall the setup: a tuple $(\mathcal{A}, R)$ where $\mathcal{A}$ is a set of $K$ arms and $R_a(r) = P[r \mid a]$ is an unknown reward distribution for each arm $a$. At each step $t$, the agent selects $a_t \in \mathcal{A}$, observes $r_t \sim R_{a_t}$, and aims to minimize total regret:</p>
 
     $$L_T = \mathbb{E}\!\left[\sum_{\tau=1}^{T} V^* - Q(a_\tau)\right]$$
 
-    <p>where $V^* = \max_{a \in \mathcal{A}} Q(a)$ is the value of the best arm. The Bayesian perspective enriches this framework by placing a prior distribution $p(R)$ over the unknown reward distributions and updating it into a posterior as data accumulates.</p>
+    <p>where $V^* = \max_{a \in \mathcal{A}} Q(a)$ is the value of the best arm. The Bayesian perspective adds a prior $p(R)$ over the unknown reward distributions, updating it into a posterior as data accumulates.</p>
 
     <!-- Section 2: Bayesian Inference Refresher -->
     <h2 id="bayesian-inference">Bayesian Inference for Bandits</h2>
 
-    <p>In the Bayesian view, we treat the unknown reward parameters as random variables and maintain a <strong>posterior distribution</strong> over them that captures our uncertainty. Let each arm $i$ have a reward distribution parameterized by $\phi_i$. We begin with a prior $p(\phi_i)$ encoding our initial beliefs, then update after each observation using Bayes' rule.</p>
+    <p>In the Bayesian view, the unknown reward parameters are random variables, and we maintain a <strong>posterior distribution</strong> capturing our uncertainty. Let each arm $i$ have a reward distribution parameterized by $\phi_i$. We begin with a prior $p(\phi_i)$ and update after each observation using Bayes' rule.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition &mdash; Posterior Update</div>
       <p>Given a prior $p(\phi_i)$ over the reward parameter of arm $i$ and an observed reward $r_{i1}$ from pulling that arm, the <strong>posterior distribution</strong> is computed via Bayes' rule:</p>
       $$p(\phi_i \mid r_{i1}) = \frac{p(r_{i1} \mid \phi_i)\, p(\phi_i)}{p(r_{i1})} = \frac{p(r_{i1} \mid \phi_i)\, p(\phi_i)}{\int_{\phi_i} p(r_{i1} \mid \phi_i)\, p(\phi_i)\, d\phi_i}$$
-      <p>The numerator is the product of the likelihood and the prior. The denominator is a normalizing constant ensuring the posterior integrates to one.</p>
+      <p>The numerator is likelihood times prior; the denominator is a normalizing constant ensuring the posterior integrates to one.</p>
     </div>
 
-    <p>In general, computing this posterior exactly can be intractable&mdash;the integral in the denominator may not have a closed-form solution. However, when the prior and likelihood belong to certain matched families, the computation becomes elegant and analytically tractable. This leads us to the concept of <strong>conjugate priors</strong>.</p>
+    <p>Computing this posterior exactly can be intractable&mdash;the denominator integral may lack a closed form. But when the prior and likelihood belong to certain matched families, the update becomes analytically tractable. This leads us to <strong>conjugate priors</strong>.</p>
 
     <h3 id="conjugate-priors">Conjugate Priors</h3>
 
-    <p>A prior distribution is said to be <strong>conjugate</strong> to a given likelihood if the resulting posterior belongs to the same parametric family as the prior. When a conjugate relationship holds, the Bayesian update reduces to a simple parameter update rather than requiring numerical integration. Exponential family distributions, which include many common distributions, always have conjugate priors.</p>
+    <p>A prior is <strong>conjugate</strong> to a likelihood if the posterior belongs to the same parametric family as the prior. When this holds, the Bayesian update reduces to a simple parameter update rather than numerical integration. Exponential family distributions always have conjugate priors.</p>
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
-      <p><strong>Why conjugacy matters for bandits.</strong> In a bandit algorithm, we must update our beliefs after every single arm pull&mdash;potentially millions of times. If each update required expensive numerical integration or sampling (MCMC), the algorithm would be impractical. Conjugate priors make the posterior update a constant-time operation: just increment a few sufficient statistics. This is what makes Bayesian bandit algorithms like Thompson Sampling computationally competitive with frequentist methods like UCB.</p>
+      <p><strong>Why conjugacy matters for bandits.</strong> We update beliefs after every arm pull&mdash;potentially millions of times. If each update required MCMC or numerical integration, the algorithm would be impractical. Conjugate priors make the posterior update a constant-time operation: just increment a few sufficient statistics. This is what makes Thompson Sampling computationally competitive with UCB.</p>
     </div>
 
     <!-- Section 3: Beta-Bernoulli Bandits -->
     <h2 id="beta-bernoulli">The Beta-Bernoulli Bandit</h2>
 
-    <p>The most important and illustrative instance of a Bayesian bandit is the <strong>Beta-Bernoulli model</strong>. Consider a bandit problem where each arm's reward is binary&mdash;either 0 or 1&mdash;sampled from a Bernoulli distribution with unknown parameter $\theta$. This naturally models many real-world scenarios: whether a user clicks on an advertisement, whether a medical treatment succeeds or fails, whether a website variant leads to a conversion.</p>
+    <p>The most important instance of a Bayesian bandit is the <strong>Beta-Bernoulli model</strong>. Each arm's reward is binary&mdash;0 or 1&mdash;drawn from a Bernoulli with unknown parameter $\theta$. This naturally models click/no-click on an ad, success/failure of a treatment, or conversion/bounce on a website variant.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition &mdash; Beta Distribution</div>
@@ -93,11 +93,11 @@
       <p>where $\Gamma(\cdot)$ is the Gamma function. The mean is $\frac{\alpha}{\alpha + \beta}$ and the variance is $\frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}$. Intuitively, $\alpha$ counts "pseudo-successes" and $\beta$ counts "pseudo-failures."</p>
     </div>
 
-    <p>The Beta distribution is <strong>conjugate</strong> to the Bernoulli likelihood. This means that if our prior over the success probability $\theta$ of an arm is $\text{Beta}(\alpha, \beta)$, then after observing a single Bernoulli reward $r \in \{0, 1\}$, the posterior is also a Beta distribution with updated parameters:</p>
+    <p>The Beta distribution is <strong>conjugate</strong> to the Bernoulli likelihood: if our prior over $\theta$ is $\text{Beta}(\alpha, \beta)$, then after observing a reward $r \in \{0, 1\}$, the posterior is again Beta with updated parameters:</p>
 
     $$\text{Prior: } \theta \sim \text{Beta}(\alpha, \beta) \quad\xrightarrow{\text{observe } r}\quad \text{Posterior: } \theta \mid r \sim \text{Beta}(\alpha + r,\; \beta + 1 - r)$$
 
-    <p>That is, a success ($r = 1$) increments $\alpha$ by one, and a failure ($r = 0$) increments $\beta$ by one. After observing $s$ successes and $f$ failures from a given arm, the posterior becomes $\text{Beta}(\alpha + s, \beta + f)$. The update is trivially cheap&mdash;just add to two counters.</p>
+    <p>A success ($r = 1$) increments $\alpha$; a failure ($r = 0$) increments $\beta$. After $s$ successes and $f$ failures, the posterior is $\text{Beta}(\alpha + s, \beta + f)$&mdash;just add to two counters.</p>
 
     <div class="callout example">
       <div class="callout-label">Example &mdash; Treating Broken Toes</div>
@@ -106,26 +106,26 @@
       <p><strong>Round 2:</strong> Sample again: $\tilde{\theta}_1 = 0.7$, $\tilde{\theta}_2 = 0.5$, $\tilde{\theta}_3 = 0.3$ (arm 3's posterior is now pessimistic). We pull arm 1 (Surgery). Observe $r = 1$ (success). Update: arm 1's posterior becomes $\text{Beta}(2, 1)$, mean $= 2/3$.</p>
       <p><strong>Round 3:</strong> Sample: $\tilde{\theta}_1 = 0.71$, $\tilde{\theta}_2 = 0.65$, $\tilde{\theta}_3 = 0.1$. Pull arm 1 again. Observe $r = 1$. Posterior: $\text{Beta}(3, 1)$, mean $= 3/4$.</p>
       <p><strong>Round 4:</strong> Sample: $\tilde{\theta}_1 = 0.75$, $\tilde{\theta}_2 = 0.45$, $\tilde{\theta}_3 = 0.4$. Pull arm 1 again. Observe $r = 1$. Posterior: $\text{Beta}(4, 1)$, mean $= 4/5$.</p>
-      <p>After just four rounds, the algorithm has already concentrated on the best arm (Surgery), having quickly discovered that arm 3 (Nothing) is ineffective. The posterior for arm 1 has a high mean and is becoming increasingly concentrated, while arm 3's posterior has shifted decidedly leftward.</p>
+      <p>After just four rounds, the algorithm has concentrated on the best arm (Surgery), having quickly discovered that Nothing is ineffective. Arm 1's posterior is becoming increasingly concentrated, while arm 3's has shifted decidedly leftward.</p>
     </div>
 
     <!-- Section 4: Bayesian Bandits Overview -->
     <h2 id="bayesian-bandit-strategies">Using the Posterior for Exploration</h2>
 
-    <p>The Bayesian framework gives us a posterior distribution $p(R \mid h_t)$ over reward parameters given the history $h_t = (a_1, r_1, \ldots, a_{t-1}, r_{t-1})$. The central question is: how should we use this posterior to guide action selection? There are several strategies.</p>
+    <p>The Bayesian framework gives us a posterior $p(R \mid h_t)$ over reward parameters given history $h_t = (a_1, r_1, \ldots, a_{t-1}, r_{t-1})$. How should we use this posterior to guide action selection?</p>
 
-    <p><strong>Bayesian UCB</strong> uses the posterior to construct upper confidence bounds. Instead of the frequentist Hoeffding-based confidence intervals, one can use quantiles of the posterior distribution as optimistic estimates. This inherits the theoretical guarantees of optimism while being more data-efficient when the prior is well-calibrated.</p>
+    <p><strong>Bayesian UCB</strong> uses posterior quantiles as optimistic estimates instead of Hoeffding-based confidence intervals. This inherits the theoretical guarantees of optimism while being more data-efficient when the prior is well-calibrated.</p>
 
     <p><strong>Probability matching</strong> selects each action with a probability equal to the posterior probability that it is optimal:</p>
 
     $$\pi(a \mid h_t) = P\!\left[Q(a) > Q(a') \;\text{for all } a' \neq a \;\middle|\; h_t\right]$$
 
-    <p>Computing this probability analytically from the posterior is typically intractable&mdash;it requires integrating over all arms' posterior distributions simultaneously. However, there is a remarkably simple algorithm that implements probability matching exactly: <strong>Thompson Sampling</strong>.</p>
+    <p>Computing this probability analytically is typically intractable&mdash;it requires integrating over all arms' posteriors simultaneously. But there is a remarkably simple algorithm that implements probability matching exactly: <strong>Thompson Sampling</strong>.</p>
 
     <!-- Section 5: Thompson Sampling -->
     <h2 id="thompson-sampling">Thompson Sampling</h2>
 
-    <p>Thompson Sampling (also called posterior sampling), originally proposed by Thompson in 1933, is one of the oldest heuristics for the exploration-exploitation trade-off. Despite its simplicity, it was not rigorously analyzed until the 2010s, when a series of papers established strong theoretical guarantees that match or nearly match those of UCB.</p>
+    <p>Thompson Sampling (also called posterior sampling), proposed by Thompson in 1933, is one of the oldest heuristics for exploration-exploitation. Despite its simplicity, it was not rigorously analyzed until the 2010s, when a series of papers established guarantees matching or nearly matching UCB.</p>
 
     <div class="algorithm">
       <div class="algorithm-title">Thompson Sampling (General Form)</div>
@@ -156,11 +156,11 @@
       </ol>
     </div>
 
-    <p>Each iteration involves only sampling from Beta distributions (cheap, $O(1)$ per arm) and incrementing counters. The entire algorithm has negligible per-step overhead compared to UCB.</p>
+    <p>Each iteration involves only sampling from Beta distributions ($O(1)$ per arm) and incrementing counters&mdash;negligible per-step overhead compared to UCB.</p>
 
     <h3 id="probability-matching-equivalence">Thompson Sampling Implements Probability Matching</h3>
 
-    <p>A beautiful theoretical property of Thompson Sampling is that it exactly implements probability matching. That is, the probability that Thompson Sampling selects arm $a$ at time $t$ equals the posterior probability that arm $a$ is optimal:</p>
+    <p>Thompson Sampling exactly implements probability matching: the probability it selects arm $a$ at time $t$ equals the posterior probability that arm $a$ is optimal:</p>
 
     $$\pi(a \mid h_t) = P\!\left[Q(a) > Q(a'),\; \forall a' \neq a \;\middle|\; h_t\right] = \mathbb{E}_{R \mid h_t}\!\left[\mathbf{1}\!\left(a = \arg\max_{a' \in \mathcal{A}} Q(a')\right)\right]$$
 
@@ -177,30 +177,30 @@
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
-      <p><strong>Why posterior sampling naturally explores.</strong> Probability matching is inherently optimistic in the face of uncertainty, though in a softer way than UCB. Arms about which we are highly uncertain have a wide posterior, which means their sampled values will occasionally be very high&mdash;causing them to be selected. As we gather data and the posterior concentrates, the sampling variance shrinks and the algorithm naturally shifts toward exploitation. Unlike UCB, which deterministically selects the arm with the highest upper bound, Thompson Sampling introduces <em>randomization</em> into the exploration strategy. This can be a significant practical advantage in settings with delayed feedback.</p>
+      <p><strong>Why posterior sampling naturally explores.</strong> Probability matching is inherently optimistic, though in a softer way than UCB. Arms we are uncertain about have a wide posterior, so their samples will occasionally be very high&mdash;causing them to be selected. As data accumulates and the posterior concentrates, sampling variance shrinks and the algorithm naturally shifts toward exploitation. Unlike UCB, which deterministically picks the arm with the highest upper bound, Thompson Sampling introduces <em>randomization</em>&mdash;a significant practical advantage in settings with delayed feedback.</p>
     </div>
 
     <!-- Section 6: Thompson Sampling vs. Optimism -->
     <h2 id="ts-vs-optimism">Thompson Sampling vs. Optimism</h2>
 
-    <p>How does Thompson Sampling compare to UCB in practice? Consider our broken-toe treatment example. With three arms (Surgery $\theta_1 = 0.95$, Taping $\theta_2 = 0.90$, Nothing $\theta_3 = 0.10$), the first few arm pulls differ notably between the two approaches:</p>
+    <p>How does Thompson Sampling compare to UCB in practice? Return to the broken-toe example with three arms (Surgery $\theta_1 = 0.95$, Taping $\theta_2 = 0.90$, Nothing $\theta_3 = 0.10$):</p>
 
     <ul>
-      <li><strong>UCB (Optimism):</strong> Must pull each arm once initially to form confidence intervals ($a_1, a_2, a_3$), then begins exploiting. After three mandatory exploratory pulls, UCB has "wasted" one pull on the terrible arm 3.</li>
-      <li><strong>Thompson Sampling:</strong> May pull arm 3 on the first step (if the random sample happens to be high), but quickly learns from the failure and shifts attention. In the example trace, TS pulls arm 3 first (bad luck in sampling), observes a failure, and then pulls arm 1 three times in a row (all successes). By step 4, TS has accumulated more reward than UCB.</li>
+      <li><strong>UCB (Optimism):</strong> Must pull each arm once to form confidence intervals ($a_1, a_2, a_3$), wasting one pull on the terrible arm 3 before it can begin exploiting.</li>
+      <li><strong>Thompson Sampling:</strong> May pull arm 3 first (bad luck in sampling), but quickly learns from the failure and shifts attention. In the example trace, TS observes the failure on arm 3, then pulls arm 1 three times in a row (all successes). By step 4, TS has accumulated more reward than UCB.</li>
     </ul>
 
-    <p>This example illustrates a broader empirical pattern. Thompson Sampling can sometimes explore more efficiently than UCB because its randomized exploration naturally adapts to the observed reward structure, rather than being forced to explore systematically. In particular, Thompson Sampling excels in <strong>contextual bandit</strong> settings&mdash;for instance, online news article recommendation (Chapelle and Li, 2010)&mdash;where the action space is large and deterministic exploration strategies would repeatedly select the same suboptimal arm before receiving feedback.</p>
+    <p>This illustrates a broader empirical pattern: Thompson Sampling's randomized exploration naturally adapts to the observed reward structure, rather than exploring systematically. It excels in <strong>contextual bandit</strong> settings&mdash;such as online news recommendation (Chapelle and Li, 2010)&mdash;where the action space is large and deterministic strategies would repeatedly select the same suboptimal arm before receiving feedback.</p>
 
     <div class="callout insight">
       <div class="callout-label">Key Insight</div>
-      <p><strong>Randomization as a feature, not a bug.</strong> In settings with delayed or batched feedback&mdash;such as a news website where thousands of users arrive per second before any click data is returned&mdash;Thompson Sampling has a structural advantage over UCB. Because UCB is deterministic (given the same data, it always selects the same arm), it would recommend the same article to every user until feedback arrives. Thompson Sampling, by contrast, randomly varies its recommendations across concurrent users, achieving better coverage of the action space even without real-time feedback. This is one reason Thompson Sampling has become the de facto standard for production A/B testing and recommendation systems.</p>
+      <p><strong>Randomization as a feature, not a bug.</strong> Consider a news website where thousands of users arrive per second before any click data is returned. UCB is deterministic&mdash;given the same data, it always selects the same arm&mdash;so it would recommend the same article to every user until feedback arrives. Thompson Sampling randomly varies recommendations across concurrent users, achieving better coverage even without real-time feedback. This is one reason it has become the de facto standard for production A/B testing and recommendation systems.</p>
     </div>
 
     <!-- Section 7: Bayesian Regret -->
     <h2 id="bayesian-regret">Bayesian Regret and Theoretical Guarantees</h2>
 
-    <p>To evaluate the performance of Bayesian bandit algorithms, we need a notion of regret that accounts for the prior. The standard frequentist regret fixes a true (unknown) parameter vector $\theta$ and measures performance against the best arm under $\theta$:</p>
+    <p>To evaluate Bayesian bandit algorithms, we need a notion of regret that accounts for the prior. Frequentist regret fixes a true parameter $\theta$ and measures performance against the best arm under $\theta$:</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition &mdash; Frequentist vs. Bayesian Regret</div>
@@ -211,7 +211,7 @@
       $$\text{BayesRegret}(\mathcal{A}, T) = \mathbb{E}_{\theta \sim p_\theta}\!\left[\text{Regret}(\mathcal{A}, T;\, \theta)\right] = \mathbb{E}_{\theta \sim p_\theta, \tau}\!\left[\sum_{t=1}^{T} Q(a^*) - Q(a_t) \;\middle|\; \theta\right]$$
     </div>
 
-    <p>Bayesian regret is a weaker criterion than worst-case frequentist regret: it measures average-case performance over the prior, rather than worst-case performance over all possible parameters. An algorithm can have low Bayesian regret by performing well on "most" parameter settings according to the prior, even if it performs poorly on some adversarial configurations.</p>
+    <p>Bayesian regret is a weaker criterion than frequentist regret: it measures average-case performance over the prior, not worst-case over all parameters. An algorithm can have low Bayesian regret by performing well on "most" parameter settings according to the prior, even if it struggles on some adversarial configurations.</p>
 
     <div class="callout theorem">
       <div class="callout-label">Theorem &mdash; Bayesian Regret of Thompson Sampling</div>
@@ -223,59 +223,59 @@
     <details class="proof">
       <summary>Proof sketch: Bounding Bayesian regret via optimism</summary>
       <div class="proof-content">
-        <p>The key idea is to relate Thompson Sampling's Bayesian regret to a UCB-style bound. For UCB, the frequentist regret is bounded by decomposing regret into terms involving the upper confidence bound $U_t(a_t)$:</p>
+        <p>The key idea is to relate Thompson Sampling's regret to a UCB-style bound. For UCB, regret decomposes into terms involving the upper confidence bound $U_t(a_t)$:</p>
         $$\text{Regret}(\text{UCB}, T;\, \theta) = \mathbb{E}_\tau\!\left[\sum_{t=1}^{T} Q(a^*) - Q(a_t)\right] \leq \mathbb{E}_\tau\!\left[\sum_{t=1}^{T} U_t(a_t) - Q(a_t)\right]$$
-        <p>where the inequality holds under the event that $U_t(a)$ is a valid upper bound on $Q(a)$ for all arms and all times. For Thompson Sampling, an analogous decomposition works because the sampled value $\tilde{Q}(a)$ from the posterior plays a role similar to the upper confidence bound: on average (over the prior), it is as optimistic as needed. Combining this with standard concentration arguments on the posterior width yields the stated bound. The detailed proof appears in Agrawal and Goyal (2012) and Russo and Van Roy (2014). $\blacksquare$</p>
+        <p>where the inequality holds when $U_t(a)$ is a valid upper bound on $Q(a)$ for all arms and times. For Thompson Sampling, an analogous decomposition works because the sampled $\tilde{Q}(a)$ plays a role similar to the upper confidence bound: on average over the prior, it is as optimistic as needed. Combining with concentration arguments on the posterior width yields the stated bound. See Agrawal and Goyal (2012) and Russo and Van Roy (2014) for details. $\blacksquare$</p>
       </div>
     </details>
 
-    <p>An important subtlety: the frequentist regret bounds for Thompson Sampling (which hold for every fixed $\theta$, not just on average over the prior) are slightly weaker than the best known UCB bounds. Specifically, the best frequentist analysis of standard Thompson Sampling does not quite match the tightest instance-dependent UCB bound. However, the Bayesian regret bounds are essentially optimal, and empirically Thompson Sampling frequently outperforms UCB.</p>
+    <p>An important subtlety: the frequentist regret bounds for Thompson Sampling (holding for every fixed $\theta$, not just on average) are slightly weaker than the best UCB bounds&mdash;the tightest instance-dependent UCB bound is not quite matched. But the Bayesian regret bounds are essentially optimal, and empirically Thompson Sampling frequently outperforms UCB.</p>
 
     <!-- Section 8: Bayes-Optimal Exploration and Gittins Indices -->
     <h2 id="optimal-bayesian">Bayes-Optimal Exploration</h2>
 
-    <p>Thompson Sampling is a highly effective heuristic, but is it <em>optimal</em>? In the Bayesian framework, we can in principle define the truly optimal exploration strategy. Given a prior over the reward parameters and a known time horizon $T$, we can formulate the bandit problem as a Markov Decision Process where the <strong>state</strong> is the current posterior distribution (or equivalently, the history of actions and rewards) and the <strong>action</strong> is which arm to pull next. The Bayes-optimal policy would be the solution to this MDP via dynamic programming.</p>
+    <p>Thompson Sampling is highly effective, but is it <em>optimal</em>? Given a prior and a known horizon $T$, we can formulate the bandit problem as an MDP where the <strong>state</strong> is the current posterior (or equivalently, the history) and the <strong>action</strong> is which arm to pull. The Bayes-optimal policy is the solution to this MDP via dynamic programming.</p>
 
-    <p>However, this formulation faces a severe computational challenge: the state space is the space of all possible posteriors (or equivalently, all possible histories), which grows exponentially with the time horizon. For a Beta-Bernoulli bandit with $K$ arms, the state after $t$ steps is a tuple of $K$ Beta distributions $(\text{Beta}(\alpha_1, \beta_1), \ldots, \text{Beta}(\alpha_K, \beta_K))$ where the parameters sum to $2K + t$. The number of possible states after $t$ steps is combinatorial in $K$ and $t$, making exact dynamic programming intractable except for very small problems.</p>
+    <p>The catch: the state space is all possible posteriors, which grows exponentially with the horizon. For a Beta-Bernoulli bandit with $K$ arms, the state after $t$ steps is a tuple $(\text{Beta}(\alpha_1, \beta_1), \ldots, \text{Beta}(\alpha_K, \beta_K))$ where the parameters sum to $2K + t$. The number of possible states is combinatorial in $K$ and $t$, making exact dynamic programming intractable except for tiny problems.</p>
 
     <h3 id="gittins-index">Gittins Indices</h3>
 
-    <p>A remarkable theoretical result partially sidesteps this intractability. The <strong>Gittins index theorem</strong> (Gittins, 1979) shows that for the special case of <em>discounted</em> Bayesian multi-armed bandits, the optimal policy has a simple <strong>index form</strong>: it computes a single real-valued index for each arm (depending only on that arm's posterior and the discount factor) and plays the arm with the highest index.</p>
+    <p>A remarkable result partially sidesteps this intractability. The <strong>Gittins index theorem</strong> (Gittins, 1979) shows that for <em>discounted</em> Bayesian bandits, the optimal policy has a simple <strong>index form</strong>: compute a single real-valued index for each arm (depending only on that arm's posterior and the discount factor) and play the arm with the highest index.</p>
 
-    <p>The Gittins index for an arm with posterior state $s$ and discount factor $\gamma$ is defined as the "fair subsidy" that would make the agent indifferent between pulling that arm and receiving a known constant reward. More precisely, it is the value $\nu$ solving a certain optimal stopping problem. While computing Gittins indices exactly is nontrivial (it requires solving a one-dimensional dynamic program for each arm), the index structure means that the arms are decoupled&mdash;a dramatic reduction from the full joint state space.</p>
+    <p>The Gittins index for an arm with posterior state $s$ and discount factor $\gamma$ is the "fair subsidy" that would make the agent indifferent between pulling that arm and receiving a known constant reward&mdash;the value $\nu$ solving a certain optimal stopping problem. Computing Gittins indices requires solving a one-dimensional dynamic program per arm, but the index structure decouples the arms&mdash;a dramatic reduction from the full joint state space.</p>
 
-    <p>However, the Gittins index result is limited: it requires discounting (not a finite horizon), independent arms, and does not extend straightforwardly to contextual bandits or MDPs. For these reasons, Thompson Sampling remains the practical algorithm of choice in most applications, despite not being exactly Bayes-optimal.</p>
+    <p>The Gittins index result is limited, though: it requires discounting (not a finite horizon), independent arms, and does not extend to contextual bandits or MDPs. For these reasons, Thompson Sampling remains the practical algorithm of choice despite not being exactly Bayes-optimal.</p>
 
     <!-- Section 9: Extensions and Practical Considerations -->
     <h2 id="extensions">Extensions and Practical Considerations</h2>
 
     <h3 id="contextual-bandits">Contextual Bandits</h3>
 
-    <p>A major strength of Thompson Sampling is its natural extension to <strong>contextual bandits</strong>, where a context (feature vector) is observed before selecting an action, and the reward depends on both the context and the action. For example, in news article recommendation, the context includes user features (browsing history, demographics), and each arm is an article. The reward (click or not) depends on the user-article match.</p>
+    <p>A major strength of Thompson Sampling is its natural extension to <strong>contextual bandits</strong>, where a context (feature vector) is observed before choosing an action. In news recommendation, for instance, the context includes user features (browsing history, demographics), each arm is an article, and the reward (click or not) depends on the user-article match.</p>
 
-    <p>In the contextual setting, we maintain a posterior over the parameters of a reward model $r = f(x, a;\, \phi) + \epsilon$, where $x$ is the context and $\phi$ are unknown parameters. For a linear reward model with Gaussian noise, the posterior over $\phi$ remains Gaussian (using a Gaussian prior), and Thompson Sampling proceeds by sampling $\tilde{\phi}$ from the posterior, computing $\tilde{Q}(a) = f(x, a;\, \tilde{\phi})$ for each arm, and selecting the arm with the highest sampled value. Chapelle and Li (2010) demonstrated that this approach substantially outperforms UCB-based methods on the Yahoo! news recommendation dataset.</p>
+    <p>We maintain a posterior over parameters of a reward model $r = f(x, a;\, \phi) + \epsilon$, where $x$ is the context. For a linear model with Gaussian noise, the posterior over $\phi$ stays Gaussian, and Thompson Sampling proceeds by sampling $\tilde{\phi}$, computing $\tilde{Q}(a) = f(x, a;\, \tilde{\phi})$ for each arm, and selecting the maximum. Chapelle and Li (2010) showed this substantially outperforms UCB-based methods on the Yahoo! news dataset.</p>
 
     <h3 id="prior-sensitivity">Sensitivity to the Prior</h3>
 
-    <p>One important consideration with Bayesian approaches is sensitivity to the prior. If the prior is well-calibrated (i.e., it accurately reflects the true distribution of reward parameters), Thompson Sampling will outperform frequentist methods. But if the prior is badly misspecified&mdash;for example, if it assigns very low probability to the true reward rates&mdash;Thompson Sampling can perform worse than UCB in the short term, since it may take many observations to overcome a misleading prior.</p>
+    <p>If the prior is well-calibrated&mdash;accurately reflecting the true distribution of reward parameters&mdash;Thompson Sampling will outperform frequentist methods. But if the prior is badly misspecified (assigning very low probability to the true reward rates), Thompson Sampling can underperform UCB in the short term, since it may take many observations to overcome a misleading prior.</p>
 
-    <p>In practice, uninformative or weakly informative priors (such as $\text{Beta}(1, 1)$, the uniform distribution) are common defaults that avoid strong assumptions while still allowing the Bayesian machinery to work. The Bayesian regret guarantees hold for any prior, so the algorithm will eventually converge to optimal behavior regardless.</p>
+    <p>In practice, weakly informative priors like $\text{Beta}(1, 1)$ (uniform) are common defaults that avoid strong assumptions while still enabling the Bayesian machinery. The regret guarantees hold for any prior, so the algorithm converges to optimal behavior regardless.</p>
 
     <!-- Section 10: Summary -->
     <h2 id="summary">Summary</h2>
 
-    <p>This lecture developed the Bayesian approach to multi-armed bandits, providing an alternative to the frequentist UCB framework from the previous lecture. The key ideas are:</p>
+    <p>This lecture developed the Bayesian approach to multi-armed bandits as an alternative to the frequentist UCB framework. The key ideas:</p>
 
     <ul>
-      <li><strong>Bayesian bandits</strong> maintain a posterior distribution over each arm's reward parameters, updated via Bayes' rule as rewards are observed. Prior knowledge is encoded in the initial distribution.</li>
-      <li><strong>Conjugate priors</strong> (such as the Beta distribution for Bernoulli rewards) enable analytically tractable posterior updates, making Bayesian algorithms computationally practical.</li>
-      <li><strong>Thompson Sampling</strong> is an elegantly simple algorithm: sample from the posterior, act greedily on the sample. It exactly implements probability matching&mdash;selecting each arm with probability equal to the posterior probability that it is optimal.</li>
-      <li><strong>Regret guarantees</strong> for Thompson Sampling match UCB bounds up to constants: $O(\sqrt{KT \ln T})$ Bayesian regret. Empirically, Thompson Sampling often outperforms UCB, especially in contextual and large-action-space settings.</li>
-      <li><strong>Bayes-optimal exploration</strong> is theoretically well-defined but computationally intractable in general. The <strong>Gittins index</strong> provides an optimal index policy for discounted bandits but does not extend to most practical settings.</li>
-      <li><strong>Practical advantages</strong> of Thompson Sampling include natural randomization (beneficial for delayed feedback), easy extension to contextual bandits, and strong empirical performance across diverse domains.</li>
+      <li><strong>Bayesian bandits</strong> maintain a posterior over each arm's reward parameters, updated via Bayes' rule. Prior knowledge is encoded in the initial distribution.</li>
+      <li><strong>Conjugate priors</strong> (e.g., Beta for Bernoulli rewards) enable analytically tractable posterior updates, making Bayesian algorithms computationally practical.</li>
+      <li><strong>Thompson Sampling</strong>: sample from the posterior, act greedily on the sample. It exactly implements probability matching&mdash;selecting each arm with probability equal to its posterior probability of being optimal.</li>
+      <li><strong>Regret guarantees</strong> match UCB up to constants: $O(\sqrt{KT \ln T})$ Bayesian regret. Empirically, Thompson Sampling often outperforms UCB, especially in contextual and large-action-space settings.</li>
+      <li><strong>Bayes-optimal exploration</strong> is well-defined but computationally intractable. The <strong>Gittins index</strong> provides an optimal index policy for discounted bandits but does not extend to most practical settings.</li>
+      <li><strong>Practical advantages</strong> include natural randomization (beneficial for delayed feedback), easy extension to contextual bandits, and strong empirical performance across diverse domains.</li>
     </ul>
 
-    <p>Together with UCB, Thompson Sampling forms the core toolkit for exploration in bandit problems. The frequentist and Bayesian perspectives are complementary: UCB provides worst-case guarantees independent of any prior, while Thompson Sampling leverages prior knowledge and tends to be more data-efficient when that prior is reasonable. In subsequent lectures, we will extend these ideas from bandits to the full reinforcement learning setting, where exploration must be balanced across states and time steps in a Markov Decision Process.</p>
+    <p>Together with UCB, Thompson Sampling forms the core toolkit for bandit exploration. The two perspectives are complementary: UCB provides worst-case guarantees independent of any prior, while Thompson Sampling leverages prior knowledge and tends to be more data-efficient when that prior is reasonable. In subsequent lectures, we extend these ideas from bandits to the full RL setting, where exploration must be balanced across states and time steps in an MDP.</p>
 
   </article>
 

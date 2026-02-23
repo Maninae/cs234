@@ -109,7 +109,7 @@
 
     $$\pi_{k+1} = \arg\max_{\pi'} \; L_{\pi_k}(\pi') - C \sqrt{\mathbb{E}_{s \sim d^{\pi_k}}\!\left[D_{\mathrm{KL}}(\pi' \| \pi_k)[s]\right]},$$
 
-    <p>then we can prove that $J(\pi_{k+1}) \geq J(\pi_k)$ at every step. The proof is elegant: the current policy $\pi_k$ is a feasible point with objective value zero (since $L_{\pi_k}(\pi_k) = 0$ and $D_{\mathrm{KL}}(\pi_k \| \pi_k) = 0$), so the maximum must be at least zero, and the bound guarantees non-negative improvement.</p>
+    <p>then we can prove that $J(\pi_{k+1}) \geq J(\pi_k)$ at every step.</p>
 
     <details class="proof">
       <summary>Proof of Monotonic Improvement</summary>
@@ -208,7 +208,7 @@
       </ul>
     </div>
 
-    <p>Each $k$-step estimator trades off bias and variance differently. Shorter horizons rely more heavily on the (possibly inaccurate) value function, introducing bias but reducing variance. Longer horizons use more actual reward signal, reducing bias at the cost of higher variance. GAE provides a principled way to blend all of these estimators.</p>
+    <p>Shorter horizons lean on the (possibly inaccurate) value function, trading bias for low variance; longer horizons use more reward signal but accumulate variance. GAE provides a principled way to blend all of these estimators.</p>
 
     <h3 id="gae-derivation">The GAE Formula</h3>
 
@@ -216,7 +216,7 @@
 
     $$\hat{A}_t^{\mathrm{GAE}(\gamma,\lambda)} = (1 - \lambda)\!\left(\hat{A}_t^{(1)} + \lambda\,\hat{A}_t^{(2)} + \lambda^2\,\hat{A}_t^{(3)} + \cdots\right).$$
 
-    <p>Expanding and collecting terms, this simplifies to a remarkably clean expression:</p>
+    <p>Expanding and collecting terms:</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition &mdash; Generalized Advantage Estimation</div>
@@ -254,7 +254,7 @@
 
     $$\hat{A}_t = \sum_{l=0}^{T-t-1} (\gamma\lambda)^l \delta_{t+l}^V.$$
 
-    <p>This truncation is necessary for practical implementation but introduces a small additional bias. The benefits are twofold: we only need to run the policy for $T$ timesteps before performing an update, and the resulting advantage estimates are substantially lower variance than full Monte Carlo returns while retaining most of their accuracy.</p>
+    <p>This truncation introduces a small additional bias, but the tradeoff is worthwhile: advantage estimates are substantially lower variance than full Monte Carlo returns, and updates can be triggered after just $T$ timesteps rather than waiting for episode termination.</p>
 
     <!-- Section 6: PPO Summary -->
     <h2 id="ppo-summary">PPO in Perspective</h2>
@@ -268,12 +268,12 @@
       <li><strong>Versatility:</strong> PPO has been successfully applied to continuous control, Atari games, robotic manipulation, and notably the RLHF stage of training large language models like ChatGPT.</li>
     </ul>
 
-    <p>The idea of conservative policy updating has deep roots in RL, going back to the early 2000s. PPO represents a particularly elegant and practical incarnation of this principle, converging to local optima with strong empirical performance across diverse domains.</p>
+    <p>Conservative policy updating has deep roots in RL, going back to the early 2000s. PPO is its most practical incarnation to date.</p>
 
     <!-- Section 7: Imitation Learning -->
     <h2 id="imitation-learning">Imitation Learning: Learning from Demonstrations</h2>
 
-    <p>We now shift to an entirely different paradigm for obtaining policies. In many settings, expert decision-making behavior already exists&mdash;a surgeon performing an operation, a human driving a car, or a skilled player completing a game. Rather than learning from reward signals through trial and error (which can be sample-intensive and require careful reward engineering), <strong>imitation learning</strong> aims to learn a policy directly from expert demonstrations.</p>
+    <p>In many settings, expert behavior already exists&mdash;a surgeon operating, a driver navigating, a skilled player completing a game. Rather than learning from reward signals through trial and error (which is sample-intensive and requires careful reward engineering), <strong>imitation learning</strong> learns a policy directly from those demonstrations.</p>
 
     <div class="callout definition">
       <div class="callout-label">Definition &mdash; Imitation Learning Setup</div>
@@ -320,21 +320,21 @@
       <p>This result is formalized in Ross et al. (2011), "A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning."</p>
     </div>
 
-    <p>This quadratic scaling means that even a policy with a very low per-step error rate can perform poorly over long horizons. The distribution mismatch between expert and learned trajectories is the core issue.</p>
+    <p>This quadratic scaling means that even a policy with a very low per-step error rate can perform poorly over long horizons.</p>
 
     <!-- Section 9: DAgger -->
     <h2 id="dagger">DAgger: Dataset Aggregation</h2>
 
     <p><strong>DAgger</strong> (Ross et al., 2011) addresses the distribution shift problem by iteratively collecting expert labels along the trajectories induced by the <em>current learned policy</em>, rather than the expert policy.</p>
 
-    <p>The key idea is simple: run the learned policy in the environment, observe the states it visits, and then query the expert for the correct action at each of those states. By training on this aggregated dataset&mdash;which now includes states from the learned policy's distribution&mdash;the resulting policy obtains good performance under its own induced state distribution.</p>
+    <p>The key idea is to run the learned policy in the environment, observe the states it visits, and query the expert for the correct action at each of those states. Training on this aggregated dataset&mdash;which includes states from the learned policy's own distribution&mdash;fixes the distribution mismatch that breaks behavioral cloning.</p>
 
     <p>DAgger provably avoids the quadratic compounding error, achieving a stationary deterministic policy with bounded error. However, it has a key practical limitation: it requires ongoing access to the expert, who must label new states at each iteration. In many applications (surgical robotics, autonomous driving), this interactive querying is expensive or impractical.</p>
 
     <!-- Section 10: Inverse RL and Feature Matching -->
     <h2 id="inverse-rl">Inverse Reinforcement Learning</h2>
 
-    <p>An alternative to directly cloning the policy is to recover the underlying <strong>reward function</strong> that the expert is (implicitly) optimizing. This is the task of <strong>inverse reinforcement learning (IRL)</strong>. The appeal is that the reward function is often a more compact and transferable representation of the expert's intent than the policy itself.</p>
+    <p>An alternative to cloning the policy is to recover the <strong>reward function</strong> the expert is (implicitly) optimizing&mdash;the task of <strong>inverse reinforcement learning (IRL)</strong>. A reward function is often more compact and transferable than the policy itself: learn it once, and you can optimize a new policy in a changed environment.</p>
 
     <h3 id="linear-reward-irl">Linear Feature Reward IRL</h3>
 
@@ -382,14 +382,14 @@
 
     $$\nabla_w L(w) = \tilde{\mu} - \sum_{s_i} D(s_i)\, x(s_i),$$
 
-    <p>where $D(s_i)$ is the state visitation frequency under the current model. The gradient is simply the difference between the expert's empirical feature counts and the learner's expected feature counts. When these match, the gradient is zero and the reward function is consistent with the observed behavior.</p>
+    <p>where $D(s_i)$ is the state visitation frequency under the current model. The gradient is the difference between the expert's empirical feature counts and the learner's expected feature counts; when these match, the gradient is zero and the reward function is consistent with the observed behavior.</p>
 
     <div class="callout insight">
       <div class="callout-label">MaxEnt IRL vs. Behavioral Cloning</div>
-      <p>The maximum entropy IRL formulation requires knowledge of the transition model (or the ability to gather samples from it) in order to compute state visitation frequencies. By contrast, behavioral cloning requires no dynamics model at all&mdash;it operates purely on the observed state-action pairs. This difference highlights a fundamental tradeoff: IRL recovers a more transferable representation (the reward function) but at the cost of additional assumptions and computational overhead.</p>
+      <p>MaxEnt IRL requires knowledge of the transition model (or the ability to sample from it) to compute state visitation frequencies. Behavioral cloning requires no dynamics model&mdash;it operates purely on observed state-action pairs. The tradeoff is clear: IRL recovers a more transferable representation but at the cost of additional assumptions and computational overhead.</p>
     </div>
 
-    <p>The MaxEnt IRL framework has been hugely influential and forms the basis for several subsequent methods, including Generative Adversarial Imitation Learning (Ho and Ermon, NeurIPS 2016), which frames the problem as a GAN-style game between a generator (the learned policy) and a discriminator (distinguishing expert from learned trajectories).</p>
+    <p>MaxEnt IRL forms the basis for several subsequent methods, including Generative Adversarial Imitation Learning (Ho and Ermon, NeurIPS 2016), which frames the problem as a GAN-style game between a generator (the learned policy) and a discriminator (distinguishing expert from learned trajectories).</p>
 
     <!-- Section 12: Summary -->
     <h2 id="summary">Summary and Looking Ahead</h2>

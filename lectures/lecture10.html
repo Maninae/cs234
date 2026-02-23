@@ -48,7 +48,7 @@
     <h2 id="recap">Recap: Multi-Armed Bandits and UCB</h2>
 
     <p>
-      In the previous lecture, we formalized the multi-armed bandit problem and introduced the Upper Confidence Bound (UCB) algorithm as a principled approach to the exploration-exploitation tradeoff. Recall that a multi-armed bandit is defined by a tuple $(\mathcal{A}, \mathcal{R})$, where $\mathcal{A}$ is a known set of $K$ actions (arms) and $R_a(r) = P(r \mid a)$ is an unknown reward distribution for each arm. At each time step $t$, the agent selects an action $a_t \in \mathcal{A}$, receives a stochastic reward $r_t \sim R_{a_t}$, and aims to maximize its cumulative reward over $T$ rounds.
+      Last lecture, we formalized the multi-armed bandit problem and introduced the Upper Confidence Bound (UCB) algorithm. Recall that a bandit is defined by a tuple $(\mathcal{A}, \mathcal{R})$: $\mathcal{A}$ is a known set of $K$ arms and $R_a(r) = P(r \mid a)$ is an unknown reward distribution for each arm. At each step $t$, the agent picks an action $a_t \in \mathcal{A}$, receives a stochastic reward $r_t \sim R_{a_t}$, and aims to maximize cumulative reward over $T$ rounds.
     </p>
 
     <p>
@@ -64,7 +64,7 @@
     <p>$$a_t = \arg\max_{a \in \mathcal{A}} \left[\hat{Q}_t(a) + \sqrt{\frac{2 \ln t}{N_t(a)}}\right]$$</p>
 
     <p>
-      where $\hat{Q}_t(a)$ is the empirical mean reward and $N_t(a)$ is the number of times arm $a$ has been pulled. The bonus term $\sqrt{2 \ln t / N_t(a)}$ acts as a confidence interval: it is large for rarely-tried arms (encouraging exploration) and shrinks as the arm is pulled more (favoring exploitation of well-understood arms). In this lecture, we rigorously prove that UCB achieves sublinear regret, establish fundamental lower bounds on what any algorithm can achieve, and then extend these ideas from bandits to full MDPs.
+      where $\hat{Q}_t(a)$ is the empirical mean reward and $N_t(a)$ is the number of pulls. The bonus $\sqrt{2 \ln t / N_t(a)}$ is large for rarely-tried arms (encouraging exploration) and shrinks with more pulls (favoring exploitation). In this lecture, we rigorously prove that UCB achieves sublinear regret, establish fundamental lower bounds on what any algorithm can achieve, and extend these ideas from bandits to full MDPs.
     </p>
 
     <div class="callout definition">
@@ -74,20 +74,20 @@
       </p>
       <p>$$\Delta_a = \mu^* - \mu_a$$</p>
       <p>
-        This is the expected per-step cost of playing arm $a$ instead of the optimal arm. For the optimal arm $a^*$, we have $\Delta_{a^*} = 0$. The gaps $\{\Delta_a\}$ are unknown to the learner but play a central role in regret analysis: they determine how costly each suboptimal pull is and how hard it is to distinguish each arm from the best one.
+        This is the per-step cost of playing arm $a$ instead of the best arm. For $a^*$, $\Delta_{a^*} = 0$. The gaps are unknown to the learner but drive regret analysis: they determine both how costly each suboptimal pull is and how hard it is to distinguish each arm from the best one.
       </p>
     </div>
 
     <h2 id="regret-decomposition">Decomposing Regret by Arm</h2>
 
     <p>
-      The key insight that makes regret analysis tractable is that total regret can be decomposed as a sum over suboptimal arms, each weighted by how often the algorithm plays it. Since pulling the optimal arm incurs zero regret, only suboptimal arms contribute:
+      The key insight is that total regret decomposes as a sum over suboptimal arms, each weighted by how often the algorithm plays it. Since pulling the optimal arm incurs zero regret, only suboptimal arms contribute:
     </p>
 
     <p>$$\text{Regret}(T) = \sum_{a:\, \Delta_a > 0} \Delta_a \cdot \mathbb{E}\!\left[N_a(T)\right]$$</p>
 
     <p>
-      where $N_a(T) = \sum_{t=1}^{T} \mathbf{1}(a_t = a)$ counts how many times arm $a$ is pulled in $T$ rounds. This decomposition is exact and reveals the two factors that drive regret: the gap $\Delta_a$ (how bad the arm is) and the expected pull count $\mathbb{E}[N_a(T)]$ (how often the algorithm is fooled into playing it). A good algorithm must ensure that arms with large gaps are pulled infrequently, and arms with small gaps&mdash;which are hard to distinguish from the optimum&mdash;contribute little per-pull regret even if they are pulled often.
+      where $N_a(T) = \sum_{t=1}^{T} \mathbf{1}(a_t = a)$ counts pulls of arm $a$. This decomposition reveals two factors driving regret: the gap $\Delta_a$ (how bad the arm is) and $\mathbb{E}[N_a(T)]$ (how often the algorithm is fooled into playing it). A good algorithm ensures arms with large gaps are pulled infrequently, while arms with small gaps&mdash;hard to distinguish from the optimum&mdash;contribute little per-pull regret even if pulled often.
     </p>
 
     <h2 id="ucb-regret-theorem">UCB Regret Bound</h2>
@@ -95,7 +95,7 @@
     <div class="callout theorem">
       <div class="callout-label">Theorem &mdash; UCB Regret Bound (Theorem 7.1, Lattimore &amp; Szepesvari)</div>
       <p>
-        Consider the UCB algorithm applied to a stochastic $K$-armed bandit with rewards in $[0,1]$. For any horizon $n$, with confidence parameter $\delta = 1/n^2$, the total regret satisfies:
+        For UCB applied to a stochastic $K$-armed bandit with rewards in $[0,1]$, any horizon $n$, and confidence parameter $\delta = 1/n^2$:
       </p>
       <p>$$\text{Regret}(n) \leq \sum_{i:\, \Delta_i > 0} \left(\frac{16 \ln n}{\Delta_i} + 3\Delta_i\right)$$</p>
       <p>
@@ -104,19 +104,19 @@
     </div>
 
     <p>
-      This theorem tells us two important things. First, the regret grows only <strong>logarithmically</strong> in the time horizon $n$&mdash;dramatically better than the linear regret suffered by naive strategies like pure exploration or pure exploitation. Second, the bound depends on the inverse gaps $1/\Delta_i$: arms that are very close to optimal are harder to rule out and require more samples, contributing more to the regret. We now sketch the proof.
+      Two takeaways. First, regret grows only <strong>logarithmically</strong> in $n$&mdash;dramatically better than the linear regret of naive strategies like pure exploration or pure exploitation. Second, the bound depends on $1/\Delta_i$: arms close to optimal are harder to rule out, require more samples, and contribute more regret. We now sketch the proof.
     </p>
 
     <h2 id="ucb-proof">Proof Sketch: Bounding $\mathbb{E}[N_i(n)]$ for Suboptimal Arms</h2>
 
     <p>
-      The proof proceeds by bounding $\mathbb{E}[N_i(n)]$&mdash;the expected number of times each suboptimal arm $i$ is pulled&mdash;and then plugging these bounds back into the regret decomposition. Without loss of generality, assume arm 1 is optimal, so $a^* = a_1$.
+      The strategy: bound $\mathbb{E}[N_i(n)]$ for each suboptimal arm $i$, then plug into the regret decomposition. Without loss of generality, assume arm 1 is optimal ($a^* = a_1$).
     </p>
 
     <div class="proof">
       <div class="proof-title">Proof Sketch</div>
 
-      <p><strong>Step 1: Define the "good event."</strong> For each suboptimal arm $i$, define the good event $G_i$ as the intersection of two conditions:</p>
+      <p><strong>Step 1: Define the "good event."</strong> For each suboptimal arm $i$, define the good event $G_i$ as two conditions holding simultaneously:</p>
 
       <p>Condition (*): The UCB for the optimal arm always exceeds its true mean:</p>
       <p>$$\mu_1 \leq \min_{t \leq n}\, \text{UCB}_1(t, \delta) \quad \text{where } \text{UCB}_a(t, \delta) = \hat{Q}_t(a) + \sqrt{\frac{2\ln(1/\delta)}{N_t(a)}}$$</p>
@@ -125,10 +125,10 @@
       <p>$$\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} < \mu_1$$</p>
 
       <p>
-        Intuitively, when both conditions hold, the algorithm can distinguish arm $i$ from the optimum after $u_i$ pulls: the optimistic estimate for arm $i$ drops below what we know arm 1 can achieve.
+        When both hold, the algorithm can distinguish arm $i$ from the optimum after $u_i$ pulls: the optimistic estimate for arm $i$ drops below what arm 1 can achieve.
       </p>
 
-      <p><strong>Step 2: Bound pulls under the good event.</strong> We claim that when $G_i$ holds, arm $i$ cannot be pulled more than $u_i$ times. The argument is by contradiction: suppose arm $i$ has already been pulled $u_i$ times and is selected again at time $t$. Then by condition (**), $\text{UCB}_i(t, \delta) < \mu_1$, and by condition (*), $\mu_1 \leq \text{UCB}_1(t, \delta)$. Chaining these inequalities gives $\text{UCB}_i(t, \delta) < \text{UCB}_1(t, \delta)$, which means the algorithm should have selected arm 1 instead of arm $i$&mdash;a contradiction. Therefore:</p>
+      <p><strong>Step 2: Bound pulls under the good event.</strong> When $G_i$ holds, arm $i$ cannot be pulled more than $u_i$ times. Suppose for contradiction that arm $i$ has been pulled $u_i$ times and is selected again at time $t$. By (**), $\text{UCB}_i(t, \delta) < \mu_1$, and by (*), $\mu_1 \leq \text{UCB}_1(t, \delta)$. Chaining gives $\text{UCB}_i(t, \delta) < \text{UCB}_1(t, \delta)$, so the algorithm should have selected arm 1 instead&mdash;contradiction. Therefore:</p>
 
       <p>$$\mathbb{E}\!\left[\mathbf{1}(G_i)\, N_i(n)\right] \leq u_i$$</p>
 
@@ -136,15 +136,15 @@
 
       <p>$$\mathbb{E}[N_i(n)] = \mathbb{E}[\mathbf{1}(G_i)\, N_i(n)] + \mathbb{E}[\mathbf{1}(G_i^c)\, N_i(n)] \leq u_i + n \cdot P(G_i^c)$$</p>
 
-      <p>To bound $P(G_i^c)$, we analyze each condition separately. For condition (*), by the union bound over all time steps and applying the concentration inequality (Hoeffding's inequality), we get:</p>
+      <p>To bound $P(G_i^c)$, analyze each condition separately. For (*), union-bounding over all time steps and applying Hoeffding's inequality:</p>
 
       <p>$$P\!\left(\mu_1 > \min_{t \leq n} \text{UCB}_1(t, \delta)\right) \leq \sum_{s=1}^{n} P\!\left(\mu_1 > \hat{\mu}_{1,s} + \sqrt{\frac{2\ln(1/\delta)}{s}}\right) \leq n\delta$$</p>
 
-      <p>For condition (**), we use Hoeffding's inequality applied to the empirical mean after $u_i$ pulls. Provided $u_i$ is large enough that $\sqrt{2\ln(1/\delta)/u_i} \leq c\Delta_i$ for some $c \in (0,1)$, the probability of condition (**) failing is bounded by:</p>
+      <p>For (**), applying Hoeffding to the empirical mean after $u_i$ pulls, provided $u_i$ is large enough that $\sqrt{2\ln(1/\delta)/u_i} \leq c\Delta_i$ for some $c \in (0,1)$:</p>
 
       <p>$$P\!\left(\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} \geq \mu_1\right) \leq \exp\!\left(-\frac{u_i\, c^2 \Delta_i^2}{2}\right)$$</p>
 
-      <p><strong>Step 4: Choose $u_i$ and combine.</strong> The constraint $\sqrt{2\ln(1/\delta)/u_i} \leq c\Delta_i$ rearranges to:</p>
+      <p><strong>Step 4: Choose $u_i$ and combine.</strong> Rearranging the constraint:</p>
 
       <p>$$u_i \geq \frac{2\ln(1/\delta)}{(1-c)^2 \Delta_i^2}$$</p>
 
@@ -152,7 +152,7 @@
 
       <p>$$u_i = \frac{16\ln n}{\Delta_i^2}$$</p>
 
-      <p>Substituting back into the bound on $\mathbb{E}[N_i(n)]$ and combining the failure probabilities gives:</p>
+      <p>Substituting back and combining failure probabilities:</p>
 
       <p>$$\mathbb{E}[N_i(n)] \leq \frac{16\ln n}{\Delta_i^2} + 3$$</p>
 
@@ -166,20 +166,20 @@
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; Why Logarithmic Regret is Achievable</div>
       <p>
-        The proof reveals the mechanism behind logarithmic regret. Each suboptimal arm $i$ needs roughly $O(\ln n / \Delta_i^2)$ pulls before its confidence interval is tight enough to conclusively rule it out. After that point, the algorithm almost never selects it again. The total regret contribution from arm $i$ is therefore $\Delta_i \times O(\ln n / \Delta_i^2) = O(\ln n / \Delta_i)$. The logarithmic dependence on $n$ arises because the confidence bonus $\sqrt{\ln t / N_t(a)}$ shrinks at a rate that exactly balances the growing number of rounds. Essentially, the algorithm needs to "waste" only a logarithmically growing number of pulls on each suboptimal arm to be confident it is suboptimal.
+        The proof reveals the mechanism behind logarithmic regret. Each suboptimal arm $i$ needs $O(\ln n / \Delta_i^2)$ pulls before its confidence interval is tight enough to rule it out. After that, the algorithm almost never selects it again. The regret contribution from arm $i$ is $\Delta_i \times O(\ln n / \Delta_i^2) = O(\ln n / \Delta_i)$. The logarithmic dependence on $n$ arises because the confidence bonus $\sqrt{\ln t / N_t(a)}$ shrinks at a rate that exactly balances the growing number of rounds&mdash;the algorithm "wastes" only logarithmically many pulls per suboptimal arm to become confident it is suboptimal.
       </p>
     </div>
 
     <h3 id="gap-independent">The Gap-Independent Bound</h3>
 
     <p>
-      The gap-dependent bound $O(\sum_i \ln n / \Delta_i)$ is tight when the gaps are known, but it can be vacuous when some gaps are very small. We can derive a <strong>gap-independent</strong> (also called "minimax") bound by a worst-case argument. For each arm $i$, the contribution $\Delta_i \cdot \mathbb{E}[N_i(n)]$ is bounded by $16 \ln n / \Delta_i + 3\Delta_i$. To find the worst case, we note that the sum is maximized when the gaps are all equal: $\Delta_i = \Delta$ for all $K-1$ suboptimal arms. Then:
+      The gap-dependent bound is tight when gaps are known, but can be vacuous when some gaps are very small. We can derive a <strong>gap-independent</strong> ("minimax") bound by worst-case reasoning. Each arm's contribution is bounded by $16 \ln n / \Delta_i + 3\Delta_i$, and the sum is maximized when all gaps are equal: $\Delta_i = \Delta$ for all $K-1$ suboptimal arms. Then:
     </p>
 
     <p>$$\text{Regret}(n) \leq (K-1)\left(\frac{16\ln n}{\Delta} + 3\Delta\right)$$</p>
 
     <p>
-      Optimizing over $\Delta$ by setting the derivative to zero yields $\Delta^* = \sqrt{16\ln n / 3}$, but we must also respect $\Delta \leq 1$. Substituting back gives a bound of order $O(\sqrt{Kn\ln n})$, which depends on neither the gaps nor the specific reward distributions.
+      Optimizing over $\Delta$ (setting the derivative to zero) yields $\Delta^* = \sqrt{16\ln n / 3}$, but we must respect $\Delta \leq 1$. Substituting back gives $O(\sqrt{Kn\ln n})$, independent of the gaps or reward distributions.
     </p>
 
     <h2 id="lower-bounds">Lower Bounds on Bandit Regret</h2>
@@ -197,7 +197,7 @@
     </div>
 
     <p>
-      The lower bound shows that UCB's $O(\ln n / \Delta_i)$ scaling per arm is <strong>order-optimal</strong>&mdash;no algorithm can do fundamentally better. The intuition is information-theoretic: to distinguish arm $i$ from the optimum, the algorithm must collect enough samples to differentiate their reward distributions, which requires $\Omega(1/D_{\text{KL}}(\nu_i \| \nu^*))$ pulls. Each of these pulls incurs $\Delta_i$ regret.
+      This shows UCB's $O(\ln n / \Delta_i)$ per-arm scaling is <strong>order-optimal</strong>&mdash;no algorithm can do fundamentally better. The intuition is information-theoretic: distinguishing arm $i$ from the optimum requires enough samples to tell their reward distributions apart, which takes $\Omega(1/D_{\text{KL}}(\nu_i \| \nu^*))$ pulls, each costing $\Delta_i$ regret.
     </p>
 
     <p>
@@ -207,31 +207,31 @@
     <p>$$\text{Regret}(n) = \Omega\!\left(\sqrt{Kn}\right)$$</p>
 
     <p>
-      Since UCB achieves $O(\sqrt{Kn\ln n})$, the gap to the lower bound is only a $\sqrt{\ln n}$ factor. Algorithms like MOSS (Minimax Optimal Strategy in the Stochastic case) and certain variants of UCB close this gap entirely, achieving the minimax-optimal $O(\sqrt{Kn})$ rate. Nevertheless, UCB remains popular because of its simplicity and strong practical performance.
+      Since UCB achieves $O(\sqrt{Kn\ln n})$, the gap to the lower bound is only $\sqrt{\ln n}$. Algorithms like MOSS (Minimax Optimal Strategy in the Stochastic case) close this gap entirely, achieving the minimax-optimal $O(\sqrt{Kn})$ rate. UCB remains popular nonetheless for its simplicity and strong practical performance.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; The Exploration-Information Tradeoff</div>
       <p>
-        The lower bound exposes a deep connection between regret minimization and <strong>hypothesis testing</strong>. An algorithm must gather enough statistical evidence to distinguish the optimal arm from each suboptimal alternative. The KL divergence quantifies the "statistical distance" between two reward distributions: when distributions are close (small KL divergence), more samples are needed to tell them apart, and more regret is incurred. This information-theoretic perspective unifies exploration across bandits, MDPs, and Bayesian optimization.
+        The lower bound reveals a deep connection between regret minimization and <strong>hypothesis testing</strong>. An algorithm must gather enough evidence to distinguish the optimal arm from each alternative. KL divergence quantifies the "statistical distance" between two reward distributions: when distributions are close (small KL divergence), more samples are needed, and more regret is incurred. This information-theoretic perspective unifies exploration across bandits, MDPs, and Bayesian optimization.
       </p>
     </div>
 
     <h2 id="bandits-to-mdps">From Bandits to MDPs: The Exploration Challenge</h2>
 
     <p>
-      Multi-armed bandits are a powerful abstraction, but real-world reinforcement learning problems involve <strong>sequential</strong> decision-making: actions affect not only the immediate reward but also the next state, which in turn determines future actions and rewards. A $K$-armed bandit is, in essence, a single-state MDP with $K$ actions. Moving to full MDPs introduces several new challenges for exploration:
+      Bandits are a powerful abstraction, but real RL problems involve <strong>sequential</strong> decision-making: actions affect not only the immediate reward but the next state, which determines future actions and rewards. A $K$-armed bandit is really a single-state MDP. Moving to full MDPs introduces several new exploration challenges:
     </p>
 
     <ul>
-      <li><strong>State-dependent exploration:</strong> The agent must explore different actions in different states. An action that is well-understood in one state may be completely untested in another.</li>
-      <li><strong>Delayed consequences:</strong> Trying a suboptimal action may lead to an informative state that enables future learning. The value of information is spread across time, not concentrated at the moment of decision.</li>
+      <li><strong>State-dependent exploration:</strong> An action well-understood in one state may be untested in another.</li>
+      <li><strong>Delayed consequences:</strong> A suboptimal action may lead to an informative state that enables future learning. The value of information is spread across time, not concentrated at the moment of decision.</li>
       <li><strong>Exponential state spaces:</strong> With $|\mathcal{S}|$ states and $|\mathcal{A}|$ actions, the number of state-action pairs grows multiplicatively, making exhaustive exploration costly.</li>
-      <li><strong>Non-stationary exploration needs:</strong> As the agent learns more about some parts of the state space, it should shift exploration to less-understood regions&mdash;but reaching those regions may require traversing well-understood territory.</li>
+      <li><strong>Non-stationary exploration needs:</strong> As the agent learns about some parts of the state space, it should shift exploration to less-understood regions&mdash;but reaching those regions may require traversing known territory.</li>
     </ul>
 
     <p>
-      These challenges motivate formal frameworks for measuring and guaranteeing exploration efficiency in MDPs. The two dominant frameworks are <strong>regret minimization</strong> (extending the bandit notion to MDPs) and <strong>PAC-MDP</strong> (bounding the number of suboptimal actions).
+      These challenges motivate formal frameworks for exploration efficiency. The two dominant ones are <strong>regret minimization</strong> (extending the bandit notion to MDPs) and <strong>PAC-MDP</strong> (bounding the number of suboptimal actions).
     </p>
 
     <h2 id="pac-mdp">PAC-MDP: Probably Approximately Correct in MDPs</h2>
@@ -248,26 +248,26 @@
     </div>
 
     <p>
-      The PAC-MDP framework differs from regret minimization in an important way. Regret measures the <em>total</em> cost of suboptimal actions, weighting each action by its degree of suboptimality. PAC-MDP instead counts the <em>number</em> of $\epsilon$-suboptimal actions, treating all such actions equally. A PAC-MDP algorithm guarantees that, after a polynomial "burn-in" period of exploration, it acts near-optimally for all remaining time steps. This is a strong guarantee: it says the algorithm eventually "figures things out" and stops making costly mistakes, with high probability.
+      PAC-MDP differs from regret minimization in a key way. Regret measures the <em>total</em> cost of suboptimal actions, weighting each by its degree of suboptimality. PAC-MDP instead counts the <em>number</em> of $\epsilon$-suboptimal actions, treating all such actions equally. After a polynomial "burn-in" period, a PAC-MDP algorithm acts near-optimally for all remaining steps&mdash;it eventually figures things out and stops making costly mistakes, with high probability.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; PAC-MDP vs. Regret</div>
       <p>
-        A PAC-MDP bound of $N_\epsilon$ suboptimal steps implies a regret bound of roughly $O(N_\epsilon)$ (each suboptimal step contributes at most $O(V_{\max})$ regret). However, the conversion is often loose: PAC-MDP bounds tend to be polynomially larger than the best regret bounds. Conversely, low-regret algorithms are not always PAC-MDP, because regret bounds allow many mildly-suboptimal actions as long as their total cost is controlled. The two frameworks offer complementary perspectives on exploration quality.
+        A PAC-MDP bound of $N_\epsilon$ suboptimal steps implies a regret bound of roughly $O(N_\epsilon)$ (each suboptimal step costs at most $O(V_{\max})$). But the conversion is often loose: PAC-MDP bounds tend to be polynomially larger than the best regret bounds. Conversely, low-regret algorithms are not always PAC-MDP, because regret allows many mildly-suboptimal actions as long as their total cost is controlled. The two frameworks offer complementary perspectives on exploration quality.
       </p>
     </div>
 
     <h2 id="model-based-exploration">Model-Based Exploration: Optimism in MDPs</h2>
 
     <p>
-      The principle of "optimism in the face of uncertainty" that powered UCB in bandits extends naturally to MDPs. The idea is simple: when the agent does not know the true MDP dynamics, it should assume the dynamics are as favorable as possible (consistent with the data), and act optimally with respect to this optimistic model. This encourages the agent to visit unfamiliar states, because those states might harbor high rewards under the optimistic assumption.
+      The "optimism in the face of uncertainty" principle that powered UCB extends naturally to MDPs. When the agent does not know the true dynamics, it assumes they are as favorable as possible (consistent with the data) and acts optimally under this optimistic model. This drives the agent toward unfamiliar states, because those states might harbor high rewards under the optimistic assumption.
     </p>
 
     <h3 id="rmax">R-MAX</h3>
 
     <p>
-      R-MAX (Brafman and Tennenholtz, 2002) is one of the earliest provably efficient exploration algorithms for MDPs. It classifies each state-action pair as either <strong>known</strong> (visited sufficiently often) or <strong>unknown</strong>, and constructs an optimistic model:
+      R-MAX (Brafman and Tennenholtz, 2002) is one of the earliest provably efficient exploration algorithms for MDPs. It classifies each state-action pair as <strong>known</strong> or <strong>unknown</strong> and constructs an optimistic model:
     </p>
 
     <div class="algorithm">
@@ -287,7 +287,7 @@
     </div>
 
     <p>
-      The key mechanism is that unknown state-action pairs are maximally attractive in the optimistic MDP. The optimal policy for $\tilde{M}$ will therefore seek out unknown pairs&mdash;driving exploration&mdash;until they become known. Once a pair is known, its reward and dynamics in $\tilde{M}$ match reality (approximately), so the policy for $\tilde{M}$ is near-optimal in the real MDP for the known portion of the state space.
+      Unknown state-action pairs are maximally attractive in the optimistic MDP, so $\tilde{\pi}^*$ seeks them out&mdash;driving exploration&mdash;until they become known. Once known, reward and dynamics in $\tilde{M}$ match reality (approximately), so the policy is near-optimal for the known portion of the state space.
     </p>
 
     <div class="callout theorem">
@@ -304,23 +304,23 @@
     <h3 id="e3">Explicit Explore or Exploit (E3)</h3>
 
     <p>
-      The E3 algorithm (Kearns and Singh, 2002) takes a slightly different approach. Rather than building a single optimistic MDP, E3 maintains a set of "known" states and explicitly decides between two modes: <strong>exploitation</strong> (following the best known policy within the known region) and <strong>exploration</strong> (deliberately seeking unknown states). E3 computes a "balanced wandering" policy that is guaranteed to either collect high reward or quickly reach an unknown state, ensuring that exploration makes steady progress. Like R-MAX, E3 achieves polynomial sample complexity, though with somewhat different polynomial dependence on the problem parameters.
+      E3 (Kearns and Singh, 2002) takes a different approach. Rather than a single optimistic MDP, it maintains a set of "known" states and explicitly decides between <strong>exploitation</strong> (following the best policy in the known region) and <strong>exploration</strong> (seeking unknown states). E3 computes a "balanced wandering" policy guaranteed to either collect high reward or quickly reach an unknown state, ensuring steady exploration progress. Like R-MAX, E3 achieves polynomial sample complexity, with somewhat different polynomial dependence on the parameters.
     </p>
 
     <h2 id="optimistic-initialization">Optimistic Initialization</h2>
 
     <p>
-      A simpler, heuristic form of optimism is <strong>optimistic initialization</strong>: initialize the value function $Q(s,a)$ or $V(s)$ to an optimistically high value (e.g., $V_{\max} = R_{\max}/(1-\gamma)$) before any learning begins. Combined with standard model-free algorithms like Q-learning, this creates a natural drive to explore: the agent believes unvisited state-action pairs have very high value and preferentially visits them. As it accumulates experience, the value estimates decrease toward their true values, and the exploratory pressure fades.
+      A simpler, heuristic form of optimism is <strong>optimistic initialization</strong>: set $Q(s,a)$ or $V(s)$ to an optimistically high value (e.g., $V_{\max} = R_{\max}/(1-\gamma)$) before learning begins. Combined with Q-learning, this creates a natural exploration drive&mdash;the agent believes unvisited pairs have very high value and preferentially visits them. As experience accumulates, estimates decrease toward their true values and the exploratory pressure fades.
     </p>
 
     <p>
-      Optimistic initialization is easy to implement and often effective in practice, but it lacks the formal guarantees of R-MAX or E3. In particular, it does not ensure that every state-action pair is visited a sufficient number of times, and in large or adversarial environments, the initial optimism can decay before the agent has explored adequately. Despite these limitations, optimistic initialization remains a widely-used exploration strategy because of its simplicity and compatibility with existing algorithms.
+      Optimistic initialization is easy to implement and often effective, but lacks R-MAX's formal guarantees. It does not ensure every pair is visited sufficiently, and in large or adversarial environments the initial optimism can decay before the agent has explored adequately. Still, it remains widely used for its simplicity and compatibility with existing algorithms.
     </p>
 
     <h2 id="sample-complexity">Sample Complexity of Exploration</h2>
 
     <p>
-      The sample complexity of exploration provides a unified lens through which to compare exploration algorithms. It asks: how many time steps of suboptimal behavior must an algorithm endure before it converges to near-optimal performance? The answer depends critically on the structure of the MDP.
+      Sample complexity of exploration gives a unified lens for comparing algorithms: how many suboptimal steps must an algorithm endure before converging to near-optimal performance? The answer depends on the MDP's structure.
     </p>
 
     <p>
@@ -330,34 +330,42 @@
     <p>$$N_\epsilon = \tilde{O}\!\left(\frac{|\mathcal{S}|^2 |\mathcal{A}|}{\epsilon^2(1-\gamma)^4}\right)$$</p>
 
     <p>
-      where $\tilde{O}$ hides logarithmic factors. This is polynomial in all quantities, confirming that efficient exploration is possible. For regret minimization in episodic MDPs, the best known algorithms (such as UCBVI) achieve:
+      where $\tilde{O}$ hides logarithmic factors&mdash;polynomial in all quantities, confirming efficient exploration is possible. For regret minimization in episodic MDPs, the best known algorithms (e.g., UCBVI) achieve:
     </p>
 
     <p>$$\text{Regret}(T) = \tilde{O}\!\left(\sqrt{|\mathcal{S}||\mathcal{A}| H^3 T}\right)$$</p>
 
     <p>
-      where $H$ is the episode length and $T$ is the total number of episodes. This matches known lower bounds up to logarithmic factors, establishing that the exploration problem in tabular MDPs is essentially solved in theory.
+      where $H$ is the episode length and $T$ the total number of episodes. This matches lower bounds up to logarithmic factors&mdash;the exploration problem in tabular MDPs is essentially solved in theory.
     </p>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; The Bandit-MDP Connection</div>
       <p>
-        The progression from bandits to MDPs reveals a recurring theme: the principle of optimism in the face of uncertainty is remarkably versatile. In bandits, UCB adds a bonus to the estimated reward of each arm. In MDPs, R-MAX adds a bonus to the reward of unknown state-action pairs. In both cases, optimism drives systematic exploration by making the agent's estimates of poorly-understood options favorably biased, ensuring they are tried before being discarded. The formal analysis follows the same template too: decompose regret by identifying where suboptimality occurs, bound the frequency of suboptimal decisions using concentration inequalities and the optimistic structure, and sum over all sources of regret. The core mathematical machinery&mdash;Hoeffding bounds, union bounds, and careful counting arguments&mdash;transfers directly from bandits to MDPs, with the main complication being the coupling between states across time.
+        The progression from bandits to MDPs reveals a recurring theme: optimism in the face of uncertainty is remarkably versatile. In bandits, UCB adds a bonus to each arm's estimated reward. In MDPs, R-MAX adds a bonus to unknown state-action pairs. Both make poorly-understood options look favorable, ensuring they are tried before being discarded. The formal analysis follows the same template:
+      </p>
+      <ul>
+        <li>Decompose regret by identifying where suboptimality occurs.</li>
+        <li>Bound the frequency of suboptimal decisions using concentration inequalities and the optimistic structure.</li>
+        <li>Sum over all sources of regret.</li>
+      </ul>
+      <p>
+        The core machinery&mdash;Hoeffding bounds, union bounds, careful counting&mdash;transfers directly from bandits to MDPs, with the main complication being coupling between states across time.
       </p>
     </div>
 
     <h2 id="summary">Summary</h2>
 
     <p>
-      This lecture established the theoretical foundations of fast reinforcement learning. We began by proving that the UCB algorithm achieves $O\!\left(\sum_{i:\Delta_i > 0} \ln n / \Delta_i\right)$ regret in the multi-armed bandit setting, with the proof hinging on a decomposition of regret by arm, a "good event" analysis based on Hoeffding concentration, and a careful choice of the number of exploration pulls $u_i$ for each suboptimal arm. We then showed that this logarithmic rate is essentially optimal: the Lai-Robbins lower bound demonstrates that no algorithm can achieve $o(\ln n)$ regret in the worst case, and the minimax lower bound is $\Omega(\sqrt{Kn})$.
+      This lecture established the theoretical foundations of fast reinforcement learning. We proved that UCB achieves $O\!\left(\sum_{i:\Delta_i > 0} \ln n / \Delta_i\right)$ regret in bandits, with the proof hinging on regret decomposition by arm, a "good event" analysis via Hoeffding concentration, and a careful choice of exploration pulls $u_i$ per suboptimal arm. We then showed this logarithmic rate is essentially optimal: the Lai-Robbins lower bound shows no algorithm can achieve $o(\ln n)$ regret, and the minimax lower bound is $\Omega(\sqrt{Kn})$.
     </p>
 
     <p>
-      Turning to MDPs, we introduced the PAC-MDP framework as a formal measure of exploration efficiency: an algorithm is PAC-MDP if it takes at most polynomially many suboptimal actions. We studied R-MAX and E3 as concrete examples of provably efficient model-based exploration algorithms, both building on the principle of optimism in the face of uncertainty. We also discussed optimistic initialization as a simpler but less theoretically grounded alternative. The sample complexity of exploration in tabular MDPs is now well understood, with matching upper and lower bounds establishing that polynomial-time efficient exploration is achievable.
+      Turning to MDPs, we introduced PAC-MDP as a formal exploration-efficiency measure: an algorithm is PAC-MDP if it takes at most polynomially many suboptimal actions. R-MAX and E3 are provably efficient model-based algorithms, both building on optimism in the face of uncertainty, while optimistic initialization offers a simpler but less theoretically grounded alternative. The sample complexity of exploration in tabular MDPs is now well understood, with matching upper and lower bounds confirming that polynomial-time efficient exploration is achievable.
     </p>
 
     <p>
-      In the next lecture, we will explore <strong>Bayesian approaches</strong> to bandits and MDPs, including Thompson sampling and Bayesian regret bounds, which offer an alternative to the frequentist optimism-based methods studied here.
+      Next, we turn to <strong>Bayesian approaches</strong>&mdash;Thompson sampling and Bayesian regret bounds&mdash;which offer an alternative to the frequentist optimism-based methods studied here.
     </p>
 
   </article>
