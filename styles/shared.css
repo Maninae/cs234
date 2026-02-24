@@ -286,6 +286,8 @@ body::before {
   border-bottom: 1px solid var(--rule);
   position: relative;
   overflow: hidden;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .hero::after {
@@ -349,6 +351,8 @@ body::before {
 
 .content {
   padding: 0 60px 80px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* ── Module card ── */
@@ -395,7 +399,7 @@ body::before {
   display: grid;
   grid-template-columns: 1fr 280px;
   gap: 40px;
-  max-width: 900px;
+  max-width: 1200px;
 }
 
 .module-description {
@@ -568,7 +572,7 @@ body::before {
   border-radius: 12px;
   padding: 28px 32px;
   margin-top: 40px;
-  max-width: 900px;
+  max-width: 1200px;
 }
 
 .prereqs h4 {
@@ -632,7 +636,8 @@ body::before {
 .lecture-header {
   padding: 80px 60px 48px;
   border-bottom: 1px solid var(--rule);
-  max-width: 900px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .lecture-header .lecture-eyebrow {
@@ -709,7 +714,8 @@ body::before {
 /* ── Article ── */
 .lecture-article {
   padding: 48px 60px 80px;
-  max-width: 900px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .lecture-article h2 {
@@ -962,7 +968,8 @@ body::before {
   gap: 24px;
   padding: 32px 60px;
   border-top: 1px solid var(--rule);
-  max-width: 900px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .lecture-nav a {
