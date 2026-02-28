@@ -1,8 +1,7 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://latex.codecogs.com/svg.image?\dpi{200}\color{white}V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'|s,a)\,V^*(s')\right]">
-    <img alt="Bellman optimality equation" src="https://latex.codecogs.com/svg.image?\dpi{200}V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'|s,a)\,V^*(s')\right]">
-  </picture>
+
+$$V^*(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'\mid s,a)\,V^*(s')\right]$$
+
 </p>
 
 <h1 align="center">CS234 Learning Companion</h1>
