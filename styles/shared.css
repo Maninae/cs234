@@ -851,6 +851,16 @@ body::before {
   color: var(--green);
 }
 
+/* Note callout */
+.callout.note {
+  background: rgba(100, 116, 139, 0.04);
+  border-color: #64748b;
+}
+
+.callout.note .callout-label {
+  color: #64748b;
+}
+
 /* ── Algorithm blocks ── */
 .algorithm {
   background: white;

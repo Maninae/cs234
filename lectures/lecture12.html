@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 12: Fast RL Continued &mdash; CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 12</div>
+    <h2>Fast RL Continued</h2>
+    <p class="lecture-desc">Extending data-efficient exploration from bandits to MDPs: PAC learning frameworks, model-based interval estimation (MBIE-EB), Bayesian model-based RL with posterior sampling (PSRL), generalization with function approximation, exploration bonuses for deep RL, and meta-learning for exploration.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">PAC-MDP</span>
+      <span class="lecture-tag">MBIE-EB</span>
+      <span class="lecture-tag">Bayesian MDPs</span>
+      <span class="lecture-tag">PSRL</span>
+      <span class="lecture-tag">Exploration Bonuses</span>
+      <span class="lecture-tag">Contextual Bandits</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture12pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: PAC Framework -->
+    <h2 id="pac-framework">Probably Approximately Correct (PAC) Learning</h2>
+
+    <p>Over the past two lectures, we built two families of exploration algorithms for bandits: <strong>frequentist</strong> methods like UCB and <strong>Bayesian</strong> methods like Thompson Sampling. Both measure performance through <strong>regret</strong>&mdash;the cumulative gap between our rewards and the best arm's rewards over $T$ rounds.</p>
+
+    <p>But regret hides something important. An algorithm with $O(\sqrt{T})$ regret could achieve that by making many tiny mistakes&mdash;or by making a few catastrophic ones. In most settings we don't care which. But imagine you're a surgeon relying on an RL system to recommend treatments. You don't just want good <em>average</em> performance&mdash;you want a guarantee that after some learning period, the system almost never recommends a seriously bad action.</p>
+
+    <p>This motivates <strong>Probably Approximately Correct (PAC)</strong> learning. Instead of bounding cumulative regret, PAC bounds the <em>number of time steps</em> on which the agent acts significantly suboptimally. The "probably" captures a failure probability $\delta$, and the "approximately" captures a tolerance $\epsilon$.</p>
+
+    <p>Where does PAC fit among the evaluation criteria we've seen so far? Think of it as a ladder, each rung more demanding:</p>
+
+    <ol>
+      <li><strong>Empirical evaluation</strong> &mdash; run it and measure</li>
+      <li><strong>Asymptotic convergence</strong> &mdash; does it eventually find the optimal policy?</li>
+      <li><strong>Regret bounds</strong> &mdash; how does total suboptimality grow with $T$?</li>
+      <li><strong>PAC bounds</strong> &mdash; after how many steps does the agent stop making non-trivial mistakes?</li>
+    </ol>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; PAC RL Algorithm</div>
+      <p>For given $\epsilon > 0$ and $\delta \in (0, 1)$, a reinforcement learning algorithm $\mathcal{A}$ is <strong>PAC</strong> if, on all but $N$ time steps, the action $a_t$ selected by $\mathcal{A}$ at time $t$ is $\epsilon$-optimal:</p>
+      $$Q(a_t) \geq Q(a^*) - \epsilon$$
+      <p>with probability at least $1 - \delta$, where $N$ is a <strong>polynomial</strong> function of the problem parameters $(|\mathcal{S}|, |\mathcal{A}|, \frac{1}{1-\gamma}, \frac{1}{\epsilon}, \frac{1}{\delta})$.</p>
+    </div>
+
+    <p>Notice that PAC and regret are <em>complementary</em>, not competing. An algorithm can have low regret but fail PAC (by concentrating errors into rare catastrophic steps), or be PAC but have moderate regret (by taking many slightly suboptimal steps during learning). Most PAC algorithms use optimism or Thompson sampling&mdash;some simply initialize all values high to encourage exploration.</p>
+
+    <!-- Section 2: PAC for MDPs -->
+    <h2 id="pac-mdps">Fast RL in MDPs</h2>
+
+    <p>Now let's make the leap from bandits to <strong>full MDPs</strong>. The same principles carry over&mdash;optimism, probability matching, PAC&mdash;but the complexity jumps considerably. In a bandit, pulling an arm tells you about that arm's reward. In an MDP, taking action $a$ at state $s$ reveals both the reward $R(s,a)$ <em>and</em> the transition dynamics $T(s'|s,a)$. Both matter for long-term planning.</p>
+
+    <p>Even more challenging: reaching a particular state-action pair may require executing a multi-step strategy. Exploration in MDPs isn't just about trying different actions&mdash;it involves <strong>planning to explore</strong>.</p>
+
+    <p>The PAC-MDP formulation captures this. Instead of requiring each action to be $\epsilon$-optimal in immediate reward, we require the agent's <em>policy value</em> at the current state to be close to optimal:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; PAC for MDPs</div>
+      <p>For given $\epsilon > 0$ and $\delta \in (0,1)$, a reinforcement learning algorithm $\mathcal{A}$ is <strong>PAC-MDP</strong> if, on all but $N$ time steps, the action $a_t$ selected by $\mathcal{A}$ at time $t$ satisfies:</p>
+      $$V_M^{A_t}(s_t) \geq V_M^*(s_t) - \epsilon$$
+      <p>with probability at least $1 - \delta$, where $N$ is polynomial in $(|\mathcal{S}|, |\mathcal{A}|, \frac{1}{1-\gamma}, \frac{1}{\epsilon}, \frac{1}{\delta})$.</p>
+      <p>Here $V_M^{A_t}(s_t)$ denotes the value of the agent's current policy at state $s_t$, and $V_M^*(s_t)$ is the optimal value function.</p>
+    </div>
+
+    <p>The key question becomes: how quickly can an algorithm achieve PAC-MDP status? The answer depends on how efficiently it explores the state-action space, and the algorithms we develop in this lecture will achieve polynomial sample complexity in all problem parameters.</p>
+
+    <!-- Section 3: MBIE-EB -->
+    <h2 id="mbie-eb">Model-Based Interval Estimation with Exploration Bonus (MBIE-EB)</h2>
+
+    <p>Remember how UCB works in bandits? We add a confidence bonus to each arm's estimated reward, making under-explored arms look optimistically good. <strong>MBIE-EB</strong> (Strehl and Littman, 2008) does the same thing for MDPs: maintain a model, but inflate the reward at under-visited state-action pairs with an <strong>exploration bonus</strong>. It's UCB's optimism principle, transplanted into the Bellman equation.</p>
+
+    <p>The agent tracks visit counts $n_{sa}$ for each state-action pair and transition counts $n_{sas'}$ for each triple. From these, it builds empirical estimates:</p>
+
+    $$\hat{R}(s,a) = \frac{1}{n_{sa}} \sum_{t : (s_t, a_t) = (s,a)} r_t, \qquad \hat{T}(s' \mid s, a) = \frac{n_{sas'}}{n_{sa}}$$
+
+    <p>Instead of acting greedily on this model, MBIE-EB adds an exploration bonus $\frac{\beta}{\sqrt{n_{sa}}}$ to each state-action pair's reward and solves the augmented MDP. The bonus shrinks as $1/\sqrt{n}$&mdash;rarely-visited states look optimistically good (explore), while well-visited states rely on their true estimates (exploit). The key: this bonus lives inside the Bellman backup:</p>
+
+    $$\tilde{Q}(s,a) = \hat{R}(s,a) + \gamma \sum_{s'} \hat{T}(s' \mid s,a) \max_{a'} \tilde{Q}(s', a') + \frac{\beta}{\sqrt{n_{sa}(s,a)}}$$
+
+    <p>where the exploration coefficient is:</p>
+
+    $$\beta = \frac{1}{1-\gamma}\sqrt{\frac{1}{2} \ln\!\left(\frac{2|\mathcal{S}||\mathcal{A}|m}{\delta}\right)}$$
+
+    <p>The agent acts greedily on $\tilde{Q}$: pick $a_t = \arg\max_{a} \tilde{Q}(s_t, a)$, observe the transition, update counts, and re-solve.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">MBIE-EB (Strehl and Littman, 2008)</div>
+      <ol>
+        <li><span class="keyword">Given</span> $\epsilon$, $\delta$, $m$.</li>
+        <li>Set $\beta = \frac{1}{1-\gamma}\sqrt{\frac{1}{2}\ln\!\left(\frac{2|\mathcal{S}||\mathcal{A}|m}{\delta}\right)}$.</li>
+        <li><span class="keyword">Initialize</span> $n_{sas'} = 0$, $n_{sa} = 0$, $rc(s,a) = 0$, $\tilde{Q}(s,a) = \frac{1}{1-\gamma}$ for all $s \in \mathcal{S}$, $a \in \mathcal{A}$, $s' \in \mathcal{S}$.</li>
+        <li>$t = 0$, $s_t = s_{\text{init}}$.</li>
+        <li><span class="keyword">loop</span></li>
+        <li style="list-style: none; padding-left: 1.5em;">$a_t = \arg\max_{a \in \mathcal{A}} \tilde{Q}(s_t, a)$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">Observe reward $r_t$ and next state $s_{t+1}$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">$n_{sa}(s_t, a_t) \mathrel{+}= 1$; $\;n_{sas'}(s_t, a_t, s_{t+1}) \mathrel{+}= 1$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">$rc(s_t, a_t) = \frac{rc(s_t, a_t)(n_{sa}(s_t, a_t) - 1) + r_t}{n_{sa}(s_t, a_t)}$.</li>
+        <li style="list-style: none; padding-left: 1.5em;">$\hat{R}(s_t, a_t) = rc(s_t, a_t)$; $\;\hat{T}(s' \mid s_t, a_t) = \frac{n_{sas'}(s_t, a_t, s')}{n_{sa}(s_t, a_t)}$ for all $s'$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><span class="keyword">while</span> not converged <span class="keyword">do</span></li>
+        <li style="list-style: none; padding-left: 3em;">$\tilde{Q}(s,a) = \hat{R}(s,a) + \gamma \sum_{s'} \hat{T}(s' \mid s,a) \max_{a'} \tilde{Q}(s', a') + \frac{\beta}{\sqrt{n_{sa}(s,a)}}$ for all $s, a$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><span class="keyword">end while</span></li>
+        <li><span class="keyword">end loop</span></li>
+      </ol>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      The exploration bonus <em>propagates through the Bellman backup</em>. A state-action pair $(s, a)$ that leads to an under-explored region will have inflated Q-values, drawing the agent toward it even if $(s, a)$ itself has been visited many times. The bonus doesn't just reward novelty locally&mdash;it creates a gradient of optimism that pulls the agent toward unexplored frontiers.
+    </div>
+
+    <p>Notice that Q-values start at $\frac{1}{1-\gamma}$&mdash;the maximum possible value when rewards are in $[0, 1]$. This <strong>optimistic initialization</strong> gives unexplored pairs a built-in appeal, providing a second source of exploration pressure on top of the explicit bonus.</p>
+
+    <!-- Section 4: Simulation Lemma -->
+    <h2 id="simulation-lemma">The Simulation Lemma</h2>
+
+    <p>Here's a question that seems obvious but turns out to be subtle: if we learn an <em>approximate</em> model of an MDP&mdash;getting rewards and transitions mostly right&mdash;does that mean our policy will be good? Not necessarily! Small model errors could compound over a long horizon and produce terrible decisions.</p>
+
+    <p>The <strong>Simulation Lemma</strong> tells us exactly when we're safe. It bridges <em>model accuracy</em> and <em>policy quality</em>: if $\hat{T} \approx T$ and $\hat{R} \approx R$, then $V^{\pi}$ in the approximate model is close to $V^{\pi}$ in the true one. This is the theoretical backbone of MBIE-EB's PAC guarantee.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; Simulation Lemma</div>
+      <p>Let $M_1 = (\mathcal{S}, \mathcal{A}, T_1, R_1, \gamma)$ and $M_2 = (\mathcal{S}, \mathcal{A}, T_2, R_2, \gamma)$ be two MDPs that differ by at most $\alpha$ in rewards and $\beta$ in transition probabilities (L1 norm). That is, for a fixed policy $\pi$:</p>
+      $$\|R_1(s,a) - R_2(s,a)\|_\infty \leq \alpha, \qquad \|T_1(\cdot \mid s,a) - T_2(\cdot \mid s,a)\|_1 \leq \beta$$
+      <p>Then the value functions differ by at most:</p>
+      $$\max_s |V_1^\pi(s) - V_2^\pi(s)| \leq \frac{\alpha + \gamma V_{\max} \beta}{1 - \gamma}$$
+      <p>where $V_{\max} = \frac{R_{\max}}{1 - \gamma}$ is the maximum possible value.</p>
+    </div>
+
+    <details class="proof">
+      <summary>Proof of the Simulation Lemma</summary>
+      <div class="proof-content">
+        <p>Start from the Bellman equation for $Q^\pi$ in both MDPs. For any state-action pair $(s, a)$:</p>
+        $$|Q_1^\pi(s,a) - Q_2^\pi(s,a)| = \left|R_1(s,a) - R_2(s,a) + \gamma \sum_{s'} \left(T_1(s'|s,a)\, V_1^\pi(s') - T_2(s'|s,a)\, V_2^\pi(s')\right)\right|$$
+        <p>Add and subtract $T_1(s'|s,a)\, V_2^\pi(s')$ inside the summation to separate transition error from value error:</p>
+        $$\leq |R_1(s,a) - R_2(s,a)| + \gamma \left|\sum_{s'} T_1(s'|s,a)(V_1^\pi(s') - V_2^\pi(s'))\right| + \gamma \left|\sum_{s'} (T_1(s'|s,a) - T_2(s'|s,a))\, V_2^\pi(s')\right|$$
+        <p>Define $\Delta := \max_s |V_1^\pi(s) - V_2^\pi(s)|$. The first term is bounded by $\alpha$. The second term is bounded by $\gamma \Delta$ since $T_1$ is a distribution. The third term is bounded by $\gamma V_{\max} \beta$ by H&ouml;lder's inequality (L1 norm of $T_1 - T_2$ times L$\infty$ norm of $V_2^\pi$):</p>
+        $$\Delta \leq \alpha + \gamma \Delta + \gamma V_{\max} \beta$$
+        <p>Rearranging:</p>
+        $$(1 - \gamma)\Delta \leq \alpha + \gamma V_{\max} \beta$$
+        $$\boxed{\Delta \leq \frac{\alpha + \gamma V_{\max} \beta}{1 - \gamma}} \qquad \blacksquare$$
+      </div>
+    </details>
+
+    <p>Notice the $(1 - \gamma)$ in the denominator. Errors at each step propagate through the entire horizon, so longer horizons (larger $\gamma$) amplify model errors. This is intuitive: if you're planning a one-step trip, a slightly wrong map barely matters. If you're planning a cross-country journey, small errors accumulate.</p>
+
+    <!-- Section 5: MBIE-EB PAC Guarantee -->
+    <h2 id="mbie-eb-pac">MBIE-EB is PAC</h2>
+
+    <p>We can now put the pieces together: MBIE-EB is PAC-MDP. The proof has three ingredients:</p>
+
+    <ol>
+      <li><strong>Concentration</strong> &mdash; after $m$ visits to a state-action pair, $\hat{R}$ and $\hat{T}$ are close to the true values with high probability.</li>
+      <li><strong>Simulation Lemma</strong> &mdash; accurate models yield near-optimal policies.</li>
+      <li><strong>Counting argument</strong> &mdash; there are $|\mathcal{S}| \times |\mathcal{A}|$ pairs, and each can be "under-visited" at most $m$ times. So the total number of bad steps is at most $|\mathcal{S}| \cdot |\mathcal{A}| \cdot m$.</li>
+    </ol>
+
+    <p>On all other steps, the model is accurate enough and the policy is near-optimal. That's the PAC guarantee.</p>
+
+    <div class="callout theorem">
+      <div class="callout-label">Theorem &mdash; MBIE-EB PAC Guarantee (Strehl and Littman, 2008)</div>
+      <p>Suppose $\epsilon \in (0, 1)$ and $\delta \in (0, 1)$, and $M = (\mathcal{S}, \mathcal{A}, T, R, \gamma)$ is any MDP. There exists an input $m = m(\frac{1}{\epsilon}, \frac{1}{\delta})$ satisfying:</p>
+      $$m\!\left(\frac{1}{\epsilon}, \frac{1}{\delta}\right) = O\!\left(\frac{|\mathcal{S}|}{\epsilon^2(1-\gamma)^2} + \frac{1}{\epsilon^2(1-\gamma)^4} \ln \frac{|\mathcal{S}||\mathcal{A}|}{\delta}\right)$$
+      <p>and $\beta = \frac{1}{1-\gamma}\sqrt{\frac{1}{2}\ln\frac{2|\mathcal{S}||\mathcal{A}|m}{\delta}}$, such that if MBIE-EB is executed on MDP $M$, then with probability at least $1 - \delta$:</p>
+      $$V_M^{A_t}(s_t) \geq V_M^*(s_t) - \epsilon$$
+      <p>is true for all but</p>
+      $$O\!\left(\frac{|\mathcal{S}||\mathcal{A}|}{\epsilon^2(1-\gamma)^4}\left(|\mathcal{S}| + \ln\frac{|\mathcal{S}||\mathcal{A}|}{\delta}\right) \ln \frac{1}{\epsilon(1-\gamma)}\right)$$
+      <p>time steps $t$.</p>
+    </div>
+
+    <p>The sample complexity is polynomial in all problem parameters&mdash;this is what makes MBIE-EB a PAC-MDP algorithm. The dominant term scales as $\tilde{O}\!\left(\frac{|\mathcal{S}|^2 |\mathcal{A}|}{\epsilon^2 (1-\gamma)^4}\right)$, reflecting the cost of learning transitions for all $|\mathcal{S}||\mathcal{A}|$ state-action pairs to accuracy $\epsilon$ over an effective horizon of $\frac{1}{1-\gamma}$.</p>
+
+    <!-- Section 6: Bayesian Model-Based RL -->
+    <h2 id="bayesian-mdps">Bayesian Model-Based RL</h2>
+
+    <p>In Lecture 11, we saw how Bayesian bandits maintain a posterior over reward parameters and explore via Thompson Sampling. The natural next step: maintain a posterior over the <em>entire MDP</em>&mdash;transitions $\mathcal{P}$ and rewards $\mathcal{R}$.</p>
+
+    <p>The posterior $p(\mathcal{P}, \mathcal{R} \mid h_t)$ updates as we observe states, actions, and rewards. With Dirichlet priors over transitions (the conjugate for categorical distributions), these updates stay analytically tractable&mdash;just like Beta-Bernoulli for bandits.</p>
+
+    <p>The same two exploration strategies carry over:</p>
+
+    <ul>
+      <li><strong>Bayesian UCB:</strong> Construct confidence bounds from posterior quantiles and act optimistically.</li>
+      <li><strong>Thompson Sampling (Probability Matching):</strong> Sample an MDP from the posterior and act optimally under the sampled model.</li>
+    </ul>
+
+    <p>The conceptual leap is straightforward, but there's an important practical difference: "acting optimally under a sample" now means <em>solving an entire MDP</em>, not just picking the arm with the highest mean. That computational cost is the main challenge.</p>
+
+    <p>The upside? If the prior is well-calibrated, Bayesian methods can be far more data-efficient than frequentist ones. The prior encodes structural knowledge&mdash;like "nearby states have similar dynamics"&mdash;that pure counting methods like MBIE-EB cannot exploit.</p>
+
+    <!-- Section 7: PSRL -->
+    <h2 id="psrl">Posterior Sampling for Reinforcement Learning (PSRL)</h2>
+
+    <p><strong>PSRL</strong> (Osband, Russo, and Van Roy, 2013) is beautifully simple. At the start of each episode: sample a complete MDP from the posterior, solve it to get the optimal policy, and follow that policy for the entire episode. Then update the posterior and repeat.</p>
+
+    <p>Just like Thompson Sampling for bandits&mdash;but instead of sampling a reward and picking the best arm, we sample an entire world model and plan optimally within it. The probability matching property still holds:</p>
+
+    $$\pi(s, a \mid h_t) = \mathbb{P}[Q(s,a) \geq Q(s,a'),\; \forall a' \neq a \mid h_t] = \mathbb{E}_{\mathcal{P}, \mathcal{R} \mid h_t}\!\left[\mathbf{1}\!\left(a = \arg\max_{a \in \mathcal{A}} Q(s,a)\right)\right]$$
+
+    <div class="algorithm">
+      <div class="algorithm-title">Posterior Sampling for RL (PSRL) (Osband, Russo, Van Roy, 2013)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> prior over dynamics and reward models for each $(s, a)$: $p(R_{sa})$, $p(T(s' \mid s, a))$.</li>
+        <li><span class="keyword">Initialize</span> state $s_0$.</li>
+        <li><span class="keyword">for</span> $k = 1, 2, \ldots, K$ (episodes) <span class="keyword">do</span></li>
+        <li style="list-style: none; padding-left: 1.5em;">Sample an MDP $M$:</li>
+        <li style="list-style: none; padding-left: 3em;"><span class="keyword">for</span> each $(s, a)$ pair <span class="keyword">do</span></li>
+        <li style="list-style: none; padding-left: 4.5em;">Sample dynamics model $T(s' \mid s, a)$ from posterior.</li>
+        <li style="list-style: none; padding-left: 4.5em;">Sample reward model $R(s, a)$ from posterior.</li>
+        <li style="list-style: none; padding-left: 3em;"><span class="keyword">end for</span></li>
+        <li style="list-style: none; padding-left: 1.5em;">Compute $Q_M^*$, the optimal Q-function for sampled MDP $M$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><span class="keyword">for</span> $t = 1, 2, \ldots, H$ <span class="keyword">do</span></li>
+        <li style="list-style: none; padding-left: 3em;">$a_t = \arg\max_{a \in \mathcal{A}} Q_M^*(s_t, a)$.</li>
+        <li style="list-style: none; padding-left: 3em;">Observe reward $r_t$ and next state $s_{t+1}$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><span class="keyword">end for</span></li>
+        <li style="list-style: none; padding-left: 1.5em;">Update posterior $p(R_{s,a} \mid r_t)$, $p(T(s' \mid s, a) \mid s_{t+1})$ using Bayes' rule.</li>
+        <li><span class="keyword">end for</span></li>
+      </ol>
+    </div>
+
+    <p>Why sample per-episode instead of per-step? This is crucial for <strong>deep exploration</strong>. If the posterior says a distant state might be highly rewarding, PSRL commits to a policy that navigates there. Compare this to $\epsilon$-greedy, which explores locally but can never execute a multi-step plan to reach an informative state far away.</p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Concurrent PSRL</div>
+      <p>When multiple agents explore simultaneously (e.g., different users on a website), each can sample from the same posterior with different random seeds. This naturally diversifies exploration&mdash;instead of all agents heading to the same unexplored region, randomized sampling spreads them across the state space, accelerating collective learning (Dimakopoulou and Van Roy, 2018).</p>
+    </div>
+
+    <!-- Section 8: Generalization and Strategic Exploration -->
+    <h2 id="generalization-exploration">Generalization and Strategic Exploration</h2>
+
+    <p>Everything so far&mdash;MBIE-EB, PSRL, PAC&mdash;treats each state-action pair independently. That's fine when $|\mathcal{S}|$ and $|\mathcal{A}|$ are small. But in Atari, the "state" is a screen of pixels ($256^{210 \times 160 \times 3}$ possible images). In robotics, states are continuous joint angles. We'll never visit most states even <em>once</em>, let alone the multiple times MBIE-EB needs.</p>
+
+    <p>We need <strong>generalization</strong>: using experience from similar states to inform behavior at novel ones. The visit-count approach completely breaks down here.</p>
+
+    <p>The bridge between tabular methods and large-scale RL is the <strong>contextual bandit</strong>. Before choosing an action, the agent observes a context (feature vector) $s$, and the reward depends on both context and action.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Contextual Multi-Armed Bandit</div>
+      <p>A contextual bandit is a tuple $(\mathcal{A}, \mathcal{S}, \mathcal{R})$ where $\mathcal{A}$ is the action space, $\mathcal{S}$ is the context/state space, and $\mathcal{R}^{a,s}(r) = \mathbb{P}[r \mid a, s]$ is the reward distribution conditioned on both action and context. When the state/action space is large, we model:</p>
+      $$r = \theta\, \phi(s, a) + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma^2)$$
+      <p>using a feature function $\phi$ and learn the parameter vector $\theta$. In the <strong>disjoint</strong> model, each arm has its own parameter: $r(s, a) = \theta_a\, \phi(s) + \epsilon$.</p>
+    </div>
+
+    <p>The payoff of generalization is dramatic. <strong>LinUCB</strong> replaces raw visit counts with confidence ellipsoids from linear regression. As the number of arms $K$ grows, UCB's regret scales linearly with $K$ (each arm explored independently), while LinUCB stays nearly flat&mdash;learning about one arm immediately constrains all others through the shared feature space.</p>
+
+    <p>The key shift: instead of asking "how many times have I visited this state?", we ask "how uncertain is my model about this state, given everything I've seen?" A state we've never visited can still have low uncertainty if it's similar (in feature space) to states we know well.</p>
+
+    <!-- Section 9: Exploration Bonuses for Deep RL -->
+    <h2 id="exploration-bonuses-deep-rl">Exploration Bonuses for Deep RL</h2>
+
+    <p>Can we bring MBIE-EB's optimism into <strong>deep RL</strong>? The idea is simple: add an exploration bonus $r_{\text{bonus}}(s, a)$ to the Q-learning update, approximating what count-based bonuses do in the tabular setting.</p>
+
+    <p>The standard Q-learning weight update with function approximation is:</p>
+
+    $$\Delta \mathbf{w} = \alpha\!\left(r(s) + \gamma \max_{a'} \hat{Q}(s', a'; \mathbf{w}) - \hat{Q}(s, a; \mathbf{w})\right) \nabla_\mathbf{w} \hat{Q}(s, a; \mathbf{w})$$
+
+    <p>With an exploration bonus, this becomes:</p>
+
+    $$\Delta \mathbf{w} = \alpha\!\left(r(s) + r_{\text{bonus}}(s,a) + \gamma \max_{a'} \hat{Q}(s', a'; \mathbf{w}) - \hat{Q}(s, a; \mathbf{w})\right) \nabla_\mathbf{w} \hat{Q}(s, a; \mathbf{w})$$
+
+    <p>But how do you count "visits" in a continuous state space? You can't. Instead, researchers have found creative proxies for novelty:</p>
+
+    <ul>
+      <li><strong>Count-based exploration</strong> (Bellemare et al., NIPS 2016): Use density models to compute <em>pseudo-counts</em>&mdash;an effective visit count derived from how much a state changes the density model's predictions.</li>
+      <li><strong>Hash-based counts</strong> (Tang et al., NIPS 2017): Hash high-dimensional states into a lower-dimensional space and count visits in hash buckets. Simple but surprisingly effective.</li>
+      <li><strong>Neural density models</strong> (Ostrovski et al., ICML 2017): Extend count-based exploration to high-dimensional spaces using PixelCNN density models to derive pseudo-counts, enabling effective exploration in visually rich environments like Atari.</li>
+    </ul>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Montezuma's Revenge</div>
+      <p>Standard DQN with $\epsilon$-greedy learns almost nothing in this notoriously hard Atari game, even after 50 million frames&mdash;it never stumbles upon the sparse rewards hidden behind long action sequences. Add count-based exploration bonuses, and the same DQN discovers dozens of rooms and game mechanics. The bonus acts as <em>intrinsic motivation</em>&mdash;curiosity about novel states&mdash;driving the agent past the first room where $\epsilon$-greedy gets stuck.</p>
+    </div>
+
+    <p>One important caveat: bonus terms are computed at the time of visit. During experience replay, a state that was novel when first visited may have been seen many times by the time the replay happens&mdash;making the stored bonus stale.</p>
+
+    <!-- Section 10: Thompson Sampling with Function Approximation -->
+    <h2 id="ts-function-approximation">Thompson Sampling with Function Approximation</h2>
+
+    <p>Thompson Sampling faces a harder challenge with neural networks: maintaining a posterior over millions of weights is intractable. Three pragmatic approximations have emerged:</p>
+
+    <ul>
+      <li><strong>Sampling over representations</strong> (Mandel et al., 2016) &mdash; sample both features and parameters, exploring over model structure, not just fixed-architecture weights.</li>
+      <li><strong>Bootstrapped DQN</strong> (Osband et al., 2016) &mdash; train $C$ independent DQN "heads" on bootstrapped replay samples. Each episode, pick a random head and follow it. The diversity among heads proxies for posterior uncertainty&mdash;no explicit Bayesian inference needed. Exploration is relatively shallow, though.</li>
+      <li><strong>Bayesian Deep Q-Networks</strong> (Azizzadenesheli and Anandkumar, 2017) &mdash; use a neural net for features but apply <strong>Bayesian linear regression</strong> on the last layer. This gives a tractable posterior with principled uncertainty, and empirically outperforms bootstrapping.</li>
+    </ul>
+
+    <p>The gap between theory (exact posteriors give optimal exploration) and practice (approximate posteriors give heuristic exploration) remains open. No current method achieves both the computational efficiency of deep networks and the guarantees of exact Bayesian inference.</p>
+
+    <!-- Section 11: Meta-Learning for Exploration -->
+    <h2 id="meta-learning-exploration">Meta-Learning for RL Exploration</h2>
+
+    <p>Every exploration method so far has been <em>hand-designed</em>: a researcher specifies the strategy (add a bonus, sample from a posterior) and proves it works. But here's a provocative question: can agents <strong>learn to explore</strong>?</p>
+
+    <p>The meta-learning approach trains agents across many tasks so they internalize good exploration behavior. Instead of being told to add $\beta / \sqrt{n}$, the agent discovers from experience what exploration patterns lead to fast learning.</p>
+
+    <h3 id="dream">DREAM</h3>
+    <p><strong>DREAM</strong> (Liu et al., 2022) trains a policy to explore effectively across a distribution of tasks, learning strategies that generalize to new environments.</p>
+
+    <h3 id="dpt">Decision-Pretrained Transformer (DPT)</h3>
+    <p><strong>DPT</strong> (Lee, Xie, Pacchiano, Chandak, Finn, Nachum, Brunskill, 2023) takes a different approach: train a transformer on trajectories of $(s, a, r, s')$ tuples. Given past experience $D$ and a query state $s_{\text{query}}$, the transformer outputs an action distribution $M_\theta(a^* \mid s_{\text{query}}, D)$.</p>
+
+    <p>Why does this work? Training to predict optimal actions given a dataset implicitly mimics Thompson Sampling&mdash;but with a <em>learned</em> prior instead of a hand-specified one. Thompson Sampling is optimal when the prior is correct, but choosing the right prior in complex domains is itself an unsolved problem. DPT learns its implicit prior from data across many tasks, and the transformer architecture can represent far richer task distributions than any analytically tractable prior family.</p>
+
+    <p>The results are striking: on linear bandits, DPT outperforms both Thompson Sampling and LinUCB. Learned exploration can surpass hand-designed algorithms when task structure is available in training data.</p>
+
+    <!-- Section 12: Theoretical Frontiers -->
+    <h2 id="theoretical-frontiers">Theoretical Results and Open Problems</h2>
+
+    <p>Where does the theory stand? For <strong>tabular MDPs</strong>, it's essentially complete:</p>
+
+    <ul>
+      <li><strong>Regret</strong> &mdash; tight minimax bounds (Azar, Osband, Munos, 2017)</li>
+      <li><strong>PAC</strong> &mdash; tight bounds (Dann, Li, Wei, Brunskill, 2019)</li>
+      <li><strong>Instance-dependent</strong> &mdash; bounds that adapt to the specific problem, not worst-case (Zanette and Brunskill, 2019; Simchowitz and Jamieson, 2019)</li>
+    </ul>
+
+    <p>The frontier has shifted to <strong>function approximation</strong>. Jin et al. (2020) gave the first provably efficient algorithms for RL with linear function approximation. But the deeper question&mdash;<em>what makes exploration hard?</em>&mdash;requires entirely new complexity measures like <strong>eluder dimension</strong> (Russo and Van Roy) and <strong>Bellman rank</strong> (Jiang et al.).</p>
+
+    <p>A unified characterization remains elusive. This is one of the most active areas in RL theory, and progress here would directly impact practical deep RL systems.</p>
+
+    <!-- Section 13: Summary -->
+    <h2 id="summary">Summary</h2>
+
+    <p>This lecture completed our three-lecture arc on data-efficient RL (Lectures 10&ndash;12), extending exploration from bandits to full MDPs and beyond.</p>
+
+    <p>We introduced <strong>PAC</strong> as a complementary evaluation criterion to regret&mdash;especially relevant in safety-critical settings where we care about bounding the <em>count</em> of bad decisions. <strong>MBIE-EB</strong> achieves PAC-MDP guarantees by injecting optimistic exploration bonuses into the Bellman backup, grounded by the <strong>Simulation Lemma</strong> connecting model accuracy to policy quality.</p>
+
+    <p>On the Bayesian side, <strong>PSRL</strong> extends Thompson Sampling to MDPs with episode-level commitment that enables deep exploration. When tabular methods hit their limits, <strong>contextual bandits</strong> and <strong>LinUCB</strong> replace visit counts with model uncertainty, and <strong>deep RL exploration bonuses</strong> bring intrinsic motivation to neural networks. Finally, <strong>meta-learning</strong> approaches like DPT can learn to explore, outperforming hand-designed algorithms.</p>
+
+    <p>The algorithm-to-guarantee mapping for the full exploration arc:</p>
+
+    <table>
+      <thead>
+        <tr><th>Algorithm</th><th>Guarantee</th><th>Setting</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>UCB</td><td>Frequentist regret, PAC</td><td>Bandits</td></tr>
+        <tr><td>Thompson Sampling</td><td>Bayesian regret</td><td>Bandits &amp; MDPs</td></tr>
+        <tr><td>MBIE-EB</td><td>PAC</td><td>Tabular MDPs</td></tr>
+        <tr><td>PSRL</td><td>Bayesian regret</td><td>Tabular MDPs</td></tr>
+        <tr><td>LinUCB</td><td>Regret</td><td>Linear contextual bandits</td></tr>
+        <tr><td>Count-based bonuses / DPT</td><td>Empirical</td><td>Deep RL</td></tr>
+      </tbody>
+    </table>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture11.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Bayesian Bandits</span>
+    </a>
+    <a class="next" href="lecture13.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">Monte Carlo Tree Search</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

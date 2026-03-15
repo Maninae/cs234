@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 13: Monte Carlo Tree Search &mdash; CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 13</div>
+    <h2>Monte Carlo Tree Search</h2>
+    <p class="lecture-desc">From simulation-based search to UCT&mdash;how Monte Carlo Tree Search combines model-based planning with bandit-style exploration to conquer astronomically large state spaces.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Monte Carlo Tree Search</span>
+      <span class="lecture-tag">UCT</span>
+      <span class="lecture-tag">Simulation-Based Search</span>
+      <span class="lecture-tag">Game Playing</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture13pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: Local Computation for Better Decisions -->
+    <h2 id="local-computation">Local Computation for Better Decisions</h2>
+
+    <p>Every algorithm we've studied so far&mdash;value iteration, policy gradient, Q-learning&mdash;computes a policy over the <em>entire</em> state space. Before the agent takes a single action, it has reasoned about every state it could ever visit.</p>
+
+    <p>That works beautifully until the state space becomes astronomical. In Go, played on a $19 \times 19$ board, there are roughly $10^{170}$ legal positions&mdash;more than the number of atoms in the observable universe. No computer can store a value function over this space, let alone compute one. And Go isn't an outlier: robotics, logistics, and real-time strategy games all have state spaces that dwarf any global method.</p>
+
+    <p>The idea that rescues us: <strong>local, simulation-based planning</strong>. Instead of solving the entire MDP, we invest computation at <em>decision time</em> to make a better choice for the current state only. Given a simulator $\mathcal{M}_\nu$, we imagine possible futures from $s_t$, estimate action values, and pick the best one. At the next state, we start fresh.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      We only solve the sub-MDP rooted at $s_t$&mdash;not the whole problem. This sidesteps the curse of dimensionality by focusing computation where it matters: on the decisions the agent is actually about to make.
+    </div>
+
+    <p>This shift&mdash;from global policy computation to local, on-demand planning&mdash;is the foundation of Monte Carlo Tree Search.</p>
+
+    <!-- Section 2: Simple Monte Carlo Search -->
+    <h2 id="simple-mc-search">Simple Monte Carlo Search</h2>
+
+    <p>Let's start with the simplest version. We have a model $\mathcal{M}_\nu$ and some <strong>simulation policy</strong> $\pi$ (could be random, heuristic, or learned). To decide what to do at $s_t$: try each action, run $K$ simulated rollouts under $\pi$, average the returns, and pick the action that looked best.</p>
+
+    <p>For each action $a \in \mathcal{A}$, simulate $K$ episodes from the current state:</p>
+
+    $$\{s_t, a, R_{t+1}^k, \ldots, S_T^k\}_{k=1}^K \sim \mathcal{M}_\nu, \pi$$
+
+    <p>We then estimate the action-value via Monte Carlo averaging:</p>
+
+    $$Q(s_t, a) = \frac{1}{K} \sum_{k=1}^{K} G_k \xrightarrow{P} q_\pi(s_t, a)$$
+
+    <p>and select the real action greedily:</p>
+
+    $$a_t = \arg\max_{a \in \mathcal{A}} Q(s_t, a)$$
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Simple Monte Carlo Search</div>
+      <p>Given a model $\mathcal{M}_\nu$ and simulation policy $\pi$: (1) for each action $a$, simulate $K$ complete episodes from $(s_t, a)$ using $\pi$; (2) estimate $Q(s_t, a)$ as the mean return across simulations; (3) select the action with the highest estimated value. This performs <strong>one step of policy improvement</strong> over $\pi$.</p>
+    </div>
+
+    <p>Why does this work? By the law of large numbers, the Monte Carlo average converges to $q_\pi(s_t, a)$ as $K \to \infty$. And by the policy improvement theorem, acting greedily on $q_\pi$ is guaranteed to be at least as good as $\pi$ itself. Even a mediocre simulation policy produces a strictly better decision through search.</p>
+
+    <p>But there's a critical weakness: each rollout runs all the way to the terminal state. In Go, that's ~300 moves per player. Even a fast simulator struggles to get reliable estimates. Worse, $\pi$ may be poor in the early moves near $s_t$&mdash;exactly where the choice matters most.</p>
+
+    <p>We need a way to focus computation on the near-term decisions while still reasoning about long-term outcomes.</p>
+
+    <!-- Section 3: Forward Search and Expectimax Trees -->
+    <h2 id="expectimax-trees">Forward Search and Expectimax Trees</h2>
+
+    <p>Can we do better than one step of improvement? In principle, yes. Given a model $\mathcal{M}_\nu$, we can build a full <strong>expectimax tree</strong> rooted at $s_t$. The idea: expand all possible actions and successor states to some depth $H$, then work backward from the leaves to compute optimal values at the root.</p>
+
+    <p>The tree alternates between two kinds of nodes: <strong>decision nodes</strong> where the agent picks an action (maximize), and <strong>chance nodes</strong> where the environment samples a next state (average over outcomes). Computing the optimal value at the root gives us the best action without solving the whole MDP.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Expectimax Tree</div>
+      <p>A search tree rooted at the current state $s_t$, where <strong>decision nodes</strong> (squares) represent states and <strong>chance nodes</strong> (circles) represent stochastic transitions. The tree alternates: at decision nodes, the agent selects an action; at chance nodes, the environment samples a next state. Computing optimal values requires exhaustive expansion&mdash;infeasible for large MDPs.</p>
+    </div>
+
+    <p>The catch? The full tree scales as $(|\mathcal{S}| \cdot |\mathcal{A}|)^H$. For Go with ~250 legal moves and ~300 remaining moves, that exceeds $10^{700}$. Utterly intractable.</p>
+
+    <p>We need a method that builds its tree <em>selectively</em>&mdash;focusing on promising branches instead of exhaustively enumerating everything. That's exactly what MCTS does.</p>
+
+    <!-- Section 4: Monte Carlo Tree Search (MCTS) -->
+    <h2 id="mcts">Monte Carlo Tree Search</h2>
+
+    <p>The core idea is simple: instead of expanding the entire tree, <strong>grow it incrementally</strong>. Each simulation traverses the existing tree, extends it by one node, evaluates the new leaf, and propagates the result back up. Over many simulations, the tree grows dense where things look promising and stays sparse where they don't.</p>
+
+    <p>Each simulation runs three phases:</p>
+
+    <ol>
+      <li><strong>Select</strong>&mdash;Starting from the root, traverse the existing tree by choosing actions according to a <strong>tree policy</strong> (such as UCT, discussed below). The tree policy balances exploration of under-visited branches with exploitation of branches that appear promising. Continue until reaching a leaf of the current tree.</li>
+      <li><strong>Expand and Evaluate</strong>&mdash;Add one or more new child nodes to the leaf, extending the tree by one layer. Evaluate the new node to obtain a value estimate. In classical MCTS, this evaluation is done by running a <strong>rollout</strong>&mdash;a complete simulation from the new node to a terminal state using a fast default policy (often random). The return from this rollout serves as the value estimate.</li>
+      <li><strong>Backup</strong>&mdash;Propagate the evaluation result back up the tree along the path traversed during selection. At each ancestor node, update the visit count $N(s, a)$ and the mean action-value $Q(s, a)$.</li>
+    </ol>
+
+    <p>After $K$ simulations, select the real action at the root with the highest visit count (or highest mean value):</p>
+
+    $$a_t = \arg\max_{a \in \mathcal{A}} Q(s_t, a)$$
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Monte Carlo Tree Search</div>
+      <p>Given a model $\mathcal{M}_\nu$, build a <strong>search tree</strong> rooted at $s_t$ by iteratively running $K$ simulated episodes. Each simulation: (1) <strong>Select</strong> actions in the existing tree using a tree policy; (2) <strong>Expand</strong> the tree by adding a new node and <strong>evaluate</strong> it (via rollout or learned value function); (3) <strong>Backup</strong> the result to update ancestor statistics. After all simulations, select the real action with the best statistics at the root.</p>
+    </div>
+
+    <p>The magic is in the tree policy used during selection. A good tree policy must balance <em>exploration</em> (visiting under-explored branches) with <em>exploitation</em> (focusing on promising ones). Sound familiar? It's exactly the multi-armed bandit problem from Lectures 10&ndash;11. The solution that turned MCTS into a powerhouse is called UCT.</p>
+
+    <!-- Section 5: Upper Confidence Tree (UCT) Search -->
+    <h2 id="uct">Upper Confidence Trees (UCT)</h2>
+
+    <p>Here's the key connection: at each node in the search tree, the agent faces a multi-armed bandit problem. The "arms" are the available actions, and the "rewards" are returns from simulations passing through each action. <strong>UCT</strong> (Kocsis and Szepesv&aacute;ri, 2006) simply applies UCB1 at every node.</p>
+
+    <p>At node $i$, UCT picks the action with the highest score:</p>
+
+    $$Q(s, a, i) = \underbrace{\frac{1}{N(i, a)} \sum_{k=1}^{N(i,a)} G_k(i, a)}_{\text{exploitation: mean return}} + \underbrace{c\sqrt{\frac{\log N(i)}{N(i, a)}}}_{\text{exploration bonus}}$$
+
+    <p>where:</p>
+    <ul>
+      <li>$N(i, a)$ is the number of times action $a$ was selected at node $i$</li>
+      <li>$G_k(i, a)$ is the $k$-th return from node $i$ after taking action $a$</li>
+      <li>$N(i) = \sum_a N(i, a)$ is the total visit count at node $i$</li>
+      <li>$c$ is an exploration constant controlling the exploration&ndash;exploitation tradeoff</li>
+    </ul>
+
+    <p>For each simulated episode $k$, the tree policy selects the action with the highest upper bound at every node along the path from root to leaf:</p>
+
+    $$a_{ik} = \arg\max_a Q(s, a, i)$$
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      Actions with few visits get a large exploration bonus $c\sqrt{\log N(i)/N(i,a)}$, so they get tried. As visit counts grow, the bonus shrinks and the algorithm concentrates on promising branches. This makes MCTS a <strong>highly selective best-first search</strong> that automatically focuses computation where it matters most.
+    </div>
+
+    <p>Notice that the tree policy <em>evolves</em> across simulations. Early on, many actions have low visit counts and large bonuses&mdash;the tree explores broadly. Later, the exploitation term dominates, and simulations concentrate on the best lines of play. This adaptive behavior is a natural form of <strong>iterative deepening</strong> focused on the highest-value regions.</p>
+
+    <p>Kocsis and Szepesv&aacute;ri proved that UCT converges to the optimal action as simulations grow. In practice, it produces strong play with far fewer simulations than a full tree would require.</p>
+
+    <!-- Section 6: Advantages of Monte Carlo Tree Search -->
+    <h2 id="mcts-advantages">Advantages of MCTS</h2>
+
+    <p>What makes MCTS so versatile? A few key properties:</p>
+
+    <ul>
+      <li><strong>Selective search</strong> &mdash; allocates simulations to the most promising branches, not wasting time on clearly inferior actions.</li>
+      <li><strong>Dynamic evaluation</strong> &mdash; evaluates states through simulation rather than a pre-computed heuristic, adapting to novel situations on the fly.</li>
+      <li><strong>Sampling over enumeration</strong> &mdash; avoids exponential blowup by growing the tree selectively in reachable, relevant regions.</li>
+      <li><strong>Black-box compatible</strong> &mdash; only needs to <em>simulate</em> trajectories, not access explicit transition probabilities. Works with physics engines, game simulators, procedural dynamics.</li>
+      <li><strong>Anytime and parallelizable</strong> &mdash; can stop at any point and return the best action found so far. Simulations are largely independent, so they parallelize naturally.</li>
+    </ul>
+
+    <p>When is MCTS a good fit? Large state spaces, long horizons, and access to a simulator. Games, combinatorial optimization, and planning problems where the model is known or learnable. For small state/action spaces with short horizons, exact methods may be preferable.</p>
+
+    <!-- Section 7: Case Study — The Game of Go -->
+    <h2 id="game-of-go">Case Study: The Game of Go</h2>
+
+    <p>The domain that propelled MCTS from curiosity to household name: the ancient game of Go. Roughly 2,500 years old, widely regarded as the hardest classic board game, and identified by John McCarthy as a grand AI challenge. For decades, the strongest Go programs played at a weak amateur level&mdash;far behind superhuman chess engines.</p>
+
+    <p>Why so hard? The game tree is staggeringly large. Each position has ~250 legal moves (vs. ~35 in chess), and games last ~150 total moves. The tree has roughly $250^{150} \approx 10^{360}$ nodes. Minimax with alpha-beta pruning conquered chess in the 1990s, but it can't tame a branching factor of 250.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; The Game of Go</div>
+      <p>A two-player, perfect-information, zero-sum board game played on a $19 \times 19$ grid. Players alternate placing black and white stones; groups of stones are captured when fully surrounded. The game ends when both players pass, and the player controlling more territory wins. The branching factor (~250) and game length (~150 total moves) make brute-force search infeasible&mdash;the game tree has roughly $10^{360}$ nodes.</p>
+    </div>
+
+    <p>An interesting conceptual question: is Go really an RL problem? The rules are perfectly known&mdash;it's deterministic and fully observable. The challenge isn't learning the environment but <em>planning</em> within it. Go is fundamentally a planning problem&mdash;yet RL techniques proved essential for cracking it.</p>
+
+    <p>MCTS was the first breakthrough, bringing computer Go to competitive amateur levels in the mid-2000s. Programs like MoGo, Crazy Stone, and Fuego used UCT with hand-crafted rollout policies to achieve strong amateur play on the full $19 \times 19$ board. But the leap to superhuman required combining MCTS with deep neural networks&mdash;the subject of our next lecture.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      MCTS made Go tractable; deep learning made it superhuman. Pure MCTS with random rollouts plays at an amateur level&mdash;impressive, but far from expert. AlphaGo and AlphaZero replaced random rollouts with learned evaluations, used policy networks to guide search, and trained entirely through self-play.
+    </div>
+
+    <!-- Section 8: Summary -->
+    <h2 id="summary">Summary</h2>
+
+    <p>We built Monte Carlo Tree Search from the ground up, starting from the question: what if we plan locally instead of globally?</p>
+
+    <p><strong>Simple Monte Carlo search</strong> gives us one step of policy improvement&mdash;simulate $K$ rollouts per action, average the returns, act greedily. <strong>Expectimax trees</strong> give optimal lookahead but scale catastrophically as $(|\mathcal{S}| \cdot |\mathcal{A}|)^H$. <strong>MCTS</strong> splits the difference: grow the tree selectively through <em>select &rarr; expand &amp; evaluate &rarr; backup</em>, focusing simulations where they matter.</p>
+
+    <p>The breakthrough ingredient is <strong>UCT</strong>&mdash;applying UCB1 at each tree node to balance exploration and exploitation, turning MCTS into a highly selective best-first search. Go demonstrated the power of this approach: a game tree of $\sim 10^{360}$ nodes, previously intractable, yielded to MCTS at the amateur level.</p>
+
+    <p>Next up: how AlphaGo and AlphaZero combined MCTS with deep neural networks and self-play to achieve superhuman performance&mdash;replacing random rollouts with learned evaluations and training entirely without human data.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture12.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Fast RL Continued</span>
+    </a>
+    <a class="next" href="lecture14.html">
+      <span class="nav-dir">Next</span>
+      <span class="nav-title">AlphaGo &amp; AlphaZero</span>
+    </a>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guest Lecture: World of World Modeling &mdash; CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Guest Lecture &mdash; Shane Gu (Google DeepMind)</div>
+    <h2>World of World Modeling</h2>
+    <p class="lecture-desc">A sweeping tour of world models in reinforcement learning &mdash; from Solomonoff induction and the philosophy of prediction, through forward and inverse dynamics models for planning, to video models as physical reasoners and the future of world modeling.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">World Models</span>
+      <span class="lecture-tag">Model-Based RL</span>
+      <span class="lecture-tag">Solomonoff Induction</span>
+      <span class="lecture-tag">Shooting &amp; Collocation</span>
+      <span class="lecture-tag">Decision Transformers</span>
+      <span class="lecture-tag">Video Models</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/ShaneGuCS234_2026.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: What Is a World Model? -->
+    <h2 id="what-is-a-world-model">What Is a World Model?</h2>
+
+    <p>Imagine you could practice a task entirely in your head&mdash;simulating what would happen if you took each possible action, without ever touching the real world. That's the promise of a <strong>world model</strong>: a learned simulator of the environment that an agent can query for planning, imagination, and decision-making.</p>
+
+    <p>The idea traces back to J&uuml;rgen Schmidhuber (1990), who proposed training a "model network" to predict future observations and rewards alongside a "control network" that uses those predictions to plan. Ha &amp; Schmidhuber (2018) popularized the term in their aptly titled "World Models" paper. Control theorists have called the same object a "dynamics model" since the 1960s. Shane Gu's distillation cuts to the chase: <strong>"World model is the 'model' in model-based RL."</strong></p>
+
+    <p>The field evolved rapidly in the deep learning era:</p>
+    <ul>
+      <li><strong>2015:</strong> Oh et al. &mdash; action-conditional video prediction in Atari games, showing that neural networks can learn to simulate game physics from raw pixels.</li>
+      <li><strong>2016:</strong> Finn et al. &mdash; unsupervised learning for physical interaction through video prediction, demonstrating that robots can learn object dynamics from self-supervised play.</li>
+      <li><strong>2017:</strong> Weber et al. (DeepMind) &mdash; Imagination-Augmented Agents (I2A), which augment model-free policies with imagined rollouts from a learned world model.</li>
+      <li><strong>2021:</strong> Hafner et al. &mdash; DreamerV2, which masters Atari from pixels using a discrete latent world model trained entirely in imagination, achieving human-level performance with a fraction of the environment interactions.</li>
+    </ul>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; World Model</div>
+      <p>A <strong>world model</strong> is a learned approximation of environment dynamics &mdash; given the current state $s_t$ and action $a_t$, it predicts the next state $s_{t+1}$. In model-based RL, the agent uses the world model to simulate future trajectories ("imagine") without interacting with the real environment, enabling more sample-efficient learning and planning.</p>
+    </div>
+
+
+    <!-- Section 2: Solomonoff Induction -->
+    <h2 id="solomonoff-induction">What Is Prediction? &mdash; Solomonoff Induction</h2>
+
+    <p>Before we get into the mechanics, Shane Gu steps back to ask a deeper question: <em>what does it even mean to predict well?</em></p>
+
+    <p>The answer comes from <strong>Solomonoff induction</strong>&mdash;the theoretical gold standard for inductive inference. The core idea is elegant: given observed data $D_{t-1}, D_t, D_{t+1}, \ldots$, the best world model is the one that infers the <strong>shortest program</strong> $P$ that reproduces the data. Think of it as the ultimate "induction machine"&mdash;it takes data and infers rules, causes, programs. The reverse direction (program $\to$ data) is generation.</p>
+
+    <p>Formally, we apply Bayes' theorem in the space of all computable programs:</p>
+
+    $$p(P \mid D) \propto p(D \mid P) \, p(P)$$
+
+    <p>The prior $p(P)$ implements <strong>Occam's razor</strong>: shorter programs are exponentially more probable:</p>
+
+    $$p(P) \propto 2^{-|P|}$$
+
+    <p>where $|P|$ is the length of program $P$ in bits. This is deeply connected to <strong>Kolmogorov complexity</strong>&mdash;the length of the shortest program that produces a given string&mdash;and the <strong>Minimum Description Length</strong> principle, which selects models that achieve the best compression of the data.</p>
+
+    <p>Why does this matter for RL? Solomonoff induction inspired a formal definition of intelligence itself. Legg &amp; Hutter (2007) define <strong>Universal Intelligence</strong> as goal-achievement across a Solomonoff-weighted distribution of environments:</p>
+
+    $$\Upsilon(\pi) = \sum_{\mu \in E} 2^{-K(\mu)} V_\mu^\pi$$
+
+    <p>where $K(\mu)$ is the Kolmogorov complexity of environment $\mu$ and $V_\mu^\pi$ is the expected value of policy $\pi$ in that environment. Simpler environments receive more weight&mdash;intelligence is measured by performance across all computable environments, weighted by complexity.</p>
+
+    <h3 id="prediction-equals-understanding">Prediction = Understanding</h3>
+
+    <p>Ilya Sutskever crystallized the implication: "The best prediction is inferring the shortest program that reproduces the data." In other words, <strong>prediction = understanding = inferring the causal program</strong> of a phenomenon. The evidence keeps accumulating:</p>
+
+    <ul>
+      <li><strong>IQ tests and "aha!" moments</strong> are essentially compression and induction tasks&mdash;find the pattern, infer the rule, predict the next element.</li>
+      <li><strong>Grokking</strong> in deep learning&mdash;sudden generalization after prolonged memorization&mdash;appears to be a phase transition from memorizing data to understanding the underlying program.</li>
+      <li><strong>Text prediction yields emotional understanding:</strong> the OpenAI Sentiment Neuron showed that a model trained solely to predict the next character in Amazon reviews spontaneously learned a representation of sentiment.</li>
+      <li><strong>Video and audio prediction yield physical and emotional understanding:</strong> Google's Veo3 demonstrates that models trained to predict video frames develop an implicit understanding of physics, object permanence, and even human emotion.</li>
+    </ul>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Solomonoff Induction</div>
+      <p>Given observed data $D$, Solomonoff induction computes the posterior over programs via $p(P \mid D) \propto p(D \mid P) \, p(P)$, with an Occam's razor prior $p(P) \propto 2^{-|P|}$ favoring shorter programs. It is the theoretically optimal (but incomputable) framework for inductive inference &mdash; the gold standard against which all learning algorithms can be measured.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>Prediction as the path to intelligence.</strong> If mastering prediction requires inferring compact causal programs, then a sufficiently powerful predictive model is, in a deep sense, an understanding machine. This is why next-token prediction in LLMs yields reasoning, why video prediction yields physics understanding, and why prediction and intelligence may be two sides of the same coin.</p>
+    </div>
+
+    <!-- Section 3: Causality and OOD Generalization -->
+    <h2 id="causality-ood">Causality and Out-of-Distribution Generalization</h2>
+
+    <p>If prediction equals understanding, when does prediction <em>fail</em>? When the learned model relies on <strong>spurious correlations</strong> rather than causal structure. A classifier might learn that cows appear on green backgrounds and camels on sandy ones&mdash;but that pattern shatters the moment you show it a cow on a beach.</p>
+
+    <p>This is the problem of <strong>out-of-distribution (OOD) generalization</strong>, formalized by <strong>Invariant Risk Minimization</strong> (Arjovsky et al., 2019). True generalization requires learning features that are <strong>invariant</strong> across different environments&mdash;features that reflect genuine causal mechanisms rather than accidental covariation.</p>
+
+    <p>The practical takeaway is striking: <strong>"Diversity is all you need."</strong> Training on data from many different environments pushes the model toward causal features, because spurious correlations are environment-specific while causal relationships are invariant. This is exactly why large-scale pretraining works&mdash;GPT-3 trained on internet-scale text from millions of sources is forced toward the true causal structure of language rather than shortcuts specific to any one domain.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>Why diversity enables generalization.</strong> Invariant Risk Minimization shows that spurious correlations are environment-specific &mdash; they break when the data distribution shifts. By training on maximally diverse data (many environments, many interventions), a model is forced to learn only the features that are invariant &mdash; i.e., the causal ones. This is why massive internet-scale pretraining tends to produce models that generalize: diversity of training data approximates diversity of interventions on the true causal graph.</p>
+    </div>
+
+    <!-- Section 4: Empowerment and Three Levels of Prediction -->
+    <h2 id="three-levels-of-prediction">Empowerment and Three Levels of Prediction</h2>
+
+    <p>How far can an agent go in its quest to predict the world? Shane Gu introduces a striking taxonomy&mdash;three levels of increasing ambition:</p>
+
+    <h3 id="level-1">Level 1: Passively Fit Your World Model on the World</h3>
+
+    <p>This is standard pretraining&mdash;supervised learning, self-supervised learning, generative modeling. The data distribution is <strong>stationary</strong>; the agent passively observes and learns to predict. Yann LeCun's "cake" analogy captures the scale: self-supervised learning (millions of bits per sample) is the cake, supervised learning (10&ndash;10,000 bits) is the icing, and RL (a few bits) is the cherry on top.</p>
+
+    <h3 id="level-2">Level 2: Actively Fit Your World Model on the World</h3>
+
+    <p>Now the agent's actions influence what data it collects&mdash;the distribution becomes <strong>non-stationary</strong>. This encompasses post-training, DAgger, GAIL, active learning, and curiosity-driven exploration. Two examples make this concrete:</p>
+
+    <ul>
+      <li><strong>ICM</strong> (Pathak et al., 2017): Intrinsic Curiosity Module, which uses prediction error of a forward dynamics model as intrinsic reward. The agent seeks out states where its world model is most wrong&mdash;exploring precisely where it has the most to learn.</li>
+      <li><strong>VIME</strong> (Houthooft et al., 2016): Variational Information Maximizing Exploration, which uses information gain as intrinsic motivation. The agent prefers actions that maximally update its beliefs about the dynamics.</li>
+    </ul>
+
+    <p>We can make this precise with information gain. The intrinsic reward augments the extrinsic reward with the KL divergence between the posterior before and after observing the transition:</p>
+
+    $$I(S_{t+1}; \Theta \mid \xi_t, a_t) = \mathbb{E}_{s_{t+1} \sim \mathcal{P}(\cdot \mid \xi_t, a_t)} \left[ D_{\text{KL}}\!\left[ p(\theta \mid \xi_t, a_t, s_{t+1}) \,\|\, p(\theta \mid \xi_t) \right] \right]$$
+
+    $$r'(s_t, a_t, s_{t+1}) = r(s_t, a_t) + \eta \, D_{\text{KL}}\!\left[ p(\theta \mid \xi_t, a_t, s_{t+1}) \,\|\, p(\theta \mid \xi_t) \right]$$
+
+    <h3 id="level-3">Level 3: Actively Fit the World to Your World Model</h3>
+
+    <p>This is the most ambitious level&mdash;the agent takes actions in the real world to make the world itself more predictable. The examples here come not from RL but from human institutions: politicians shaping public opinion, financial firms manipulating markets, social media influencers curating audiences. As Shane Gu notes: <em>"Difficult objective. Nobody has cracked this yet at scale."</em></p>
+
+    <p>Level 3 connects to <strong>empowerment</strong> (Polani, 2005; Mohamed &amp; Rezende, 2015)&mdash;the channel capacity between an agent's actions $z$ and the resulting future states $s$:</p>
+
+    $$\mathcal{I}(s; z) \geq \mathbb{E}_{z \sim p(z), s \sim p(s|z)} \left[ \log q_\phi(s \mid z) - \log p(s) \right]$$
+
+    <p>An empowered agent can reliably cause a wide range of distinct future outcomes. Maximizing empowerment drives unsupervised skill discovery&mdash;the agent learns diverse, controllable behaviors without any extrinsic reward signal.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Empowerment</div>
+      <p><strong>Empowerment</strong> is the channel capacity (maximum mutual information) between an agent's actions and the resulting future states: $\mathcal{I}(s; z) = \max_{p(z)} I(S; Z)$. An empowered agent can reliably cause a wide range of distinct future outcomes. Maximizing empowerment drives unsupervised skill discovery &mdash; the agent learns diverse, controllable behaviors without any extrinsic reward.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>The three levels as a hierarchy of agency.</strong> Level 1 (passive prediction) is what LLMs do during pretraining. Level 2 (active data collection) is what RL agents do during exploration. Level 3 (reshaping the world) is what powerful real-world actors do &mdash; and what future AI agents may aspire to. Each level requires strictly more agency and has strictly more impact on the data distribution.</p>
+    </div>
+
+    <!-- Section 5: Forward and Inverse World Models -->
+    <h2 id="forward-inverse-models">Forward and Inverse World Models</h2>
+
+    <p>Now let's get concrete. A world model can take two fundamental forms. The <strong>forward model</strong> (dynamics model) maps a current state and action to the next state:</p>
+
+    $$s_{t+1} = F(s_t, a_t)$$
+
+    <p><strong>Inverse models</strong> come in two flavors, each serving a distinct purpose:</p>
+
+    <p>The <strong>inverse dynamics model</strong> is policy-like&mdash;given the current and next state, it infers the action that connects them:</p>
+
+    $$a_t = \Pi(s_t, s_{t+1})$$
+
+    <p>The <strong>inverse constraint model</strong> is Q-function-like&mdash;it defines a constraint that must be satisfied for a transition to be dynamically feasible:</p>
+
+    $$0 = Q(s_t, a_t, s_{t+1})$$
+
+    <p>Notice the deliberate symbol choices: $\Pi$ because the inverse dynamics model is structurally a policy (maps states to actions), and $Q$ because the constraint function is structurally a Q-function. The consistency conditions between forward and inverse models are:</p>
+
+    $$a = \Pi(s, F(s, a)) \quad \forall \; s, a$$
+    $$0 = Q(s, a, F(s, a)) \quad \forall \; s, a$$
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Forward vs. Inverse Models</div>
+      <p>A <strong>forward model</strong> $F$ predicts the next state given current state and action: $s_{t+1} = F(s_t, a_t)$. An <strong>inverse dynamics model</strong> $\Pi$ recovers the action given two consecutive states: $a_t = \Pi(s_t, s_{t+1})$. An <strong>inverse constraint model</strong> $Q$ verifies whether a transition is dynamically feasible: $Q(s_t, a_t, s_{t+1}) = 0$ iff the transition is valid. Forward models are used for shooting-based planning; inverse models enable collocation-based planning.</p>
+    </div>
+
+    <!-- Section 6: Shooting vs. Direct Collocation -->
+    <h2 id="shooting-vs-collocation">Shooting vs. Direct Collocation for Planning</h2>
+
+    <p>We have a world model. Now what? How do we actually use it to plan? Two classical approaches from optimal control offer fundamentally different strategies.</p>
+
+    <p><strong>Shooting</strong> is the more intuitive approach: optimize over action sequences and use the forward model to roll out trajectories:</p>
+
+    $$\arg\max_{a_{t:t+T}} \sum_{i=t}^{t+T} r(s_i) \quad \text{where} \quad s_{i+1} = F(s_i, a_i)$$
+
+    <p>The forward model is "in the loop"&mdash;each candidate action sequence is simulated forward through the dynamics. This is the standard approach in model-based RL: Model Predictive Control (MPC), the Cross-Entropy Method (CEM), and related shooting methods all optimize actions while the model handles the state evolution.</p>
+
+    <p><strong>Direct collocation</strong> optimizes over both state and action sequences simultaneously, enforcing dynamics as constraints rather than simulating forward. Using the inverse dynamics ($\Pi$) model:</p>
+
+    $$\arg\max_{s_{t:t+T}} \sum_{i=t}^{t+T} r(s_i) \quad \text{s.t.} \quad -|A| \leq \Pi(s_i, s_{i+1}) \leq |A|$$
+
+    <p>Using the inverse constraint ($Q$) model:</p>
+
+    $$\arg\max_{s_{t:t+T}, a_{t:t+T}} \sum_{i=t}^{t+T} r(s_i) \quad \text{s.t.} \quad Q(s_i, a_i, s_{i+1}) = 0$$
+
+    <h3 id="contact-invariant-optimization">Contact Invariant Optimization</h3>
+
+    <p>Mordatch et al. (2012, SIGGRAPH) demonstrated the power of direct collocation for contact-rich planning with a principle that sounds almost paradoxical: <strong>"First solve the task, then fix the physics."</strong> By <em>relaxing</em> the dynamics constraints during optimization, the planner can discover solutions to contact-rich locomotion and manipulation tasks that shooting methods struggle with.</p>
+
+    <p>The physics loss penalizes violations of the equations of motion, while the contact invariant loss ensures that contact forces are only applied at contact points:</p>
+
+    $$\tau(\mathbf{q}, \dot{\mathbf{q}}, \ddot{\mathbf{q}}) = J(\mathbf{q})^T \mathbf{f} + B\mathbf{u}$$
+
+    $$L_{\text{Physics}}(\mathbf{s}) = \sum_t \left\| J_t(\mathbf{s})^T \mathbf{f}_t(\mathbf{s}) + B\mathbf{u}_t(\mathbf{s}) - \tau_t(\mathbf{s}) \right\|^2$$
+
+    $$L_{\text{CI}}(\mathbf{s}) = \sum_t c_{i,\phi(t)}(\mathbf{s}) \left( \|\mathbf{e}_{i,t}(\mathbf{s})\|^2 + \|\dot{\mathbf{e}}_{i,t}(\mathbf{s})\|^2 \right)$$
+
+    <p>The optimizer begins with loose physics constraints, finds a task solution in this "easy" unconstrained space, then gradually tightens the constraints to recover physical plausibility. Collocation solves contact-rich tasks with minimal reward shaping because dynamics relaxation acts as implicit curriculum.</p>
+
+    <p>An instructive analogy: <strong>shooting is like autoregressive generation</strong> (each step depends on the previous), while <strong>collocation is like bidirectional diffusion</strong> (all timesteps are optimized jointly). This parallel is not merely cosmetic&mdash;it reflects a deep structural similarity in how information flows through the optimization.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Shooting vs. Collocation</div>
+      <p><strong>Shooting</strong> optimizes actions and simulates forward through the dynamics: $\arg\max_{a_{t:T}} \sum r(s_i)$ where $s_{i+1} = F(s_i, a_i)$. <strong>Direct collocation</strong> optimizes states (and optionally actions) jointly, enforcing dynamics as constraints. Shooting is simpler but suffers from long-horizon credit assignment; collocation handles contact-rich tasks by temporarily relaxing physics constraints.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>"First solve task, then fix physics."</strong> Contact Invariant Optimization (Mordatch et al., 2012) demonstrates a powerful principle: by relaxing dynamics constraints during planning, the optimizer can first find a task solution in an "easy" unconstrained space, then gradually tighten the constraints to recover physical plausibility. This is analogous to how bidirectional diffusion models can generate globally coherent sequences, while autoregressive models must commit sequentially.</p>
+    </div>
+
+    <!-- Section 7: Goal-Conditioned Value Functions and Decision Transformers -->
+    <h2 id="goal-conditioned-value-functions">Goal-Conditioned Value Functions and Decision Transformers</h2>
+
+    <p>Remember those deliberate symbol choices&mdash;$\Pi$ for policy, $Q$ for constraint? That notation hinted at a deeper connection: inverse models <strong>are</strong> goal-conditioned policies and value functions.</p>
+
+    <h3 id="temporal-difference-models">Temporal Difference Models</h3>
+
+    <p><strong>Temporal Difference Models</strong> (Pong et al., 2018, ICLR) reinterpret a goal-conditioned Q-function as an implicit world model. The key idea: a Q-function $Q(s_t, a_t, s_g, \tau)$ that predicts whether taking action $a_t$ in state $s_t$ will reach goal $s_g$ in $\tau$ steps is, implicitly, a temporally-extended dynamics model. The reward is sparse&mdash;nonzero only when the countdown reaches zero:</p>
+
+    $$r_d(s_t, a_t, s_{t+1}, s_g, \tau) = -D(s_{t+1}, s_g) \mathbb{1}[\tau = 0]$$
+
+    <p>The Q-function satisfies a Bellman-like recursion that elegantly bridges one-step dynamics and long-horizon reachability:</p>
+
+    $$Q(s_t, a_t, s_g, \tau) = \mathbb{E}_{p(s_{t+1}|s_t, a_t)}\!\left[ -D(s_{t+1}, s_g) \mathbb{1}[\tau = 0] + \max_a Q(s_{t+1}, a, s_g, \tau - 1) \mathbb{1}[\tau \neq 0] \right]$$
+
+    <p>Training uses <strong>hindsight relabeling</strong>&mdash;any trajectory can be relabeled as a "successful" attempt to reach the state it actually reached. At $\tau = 1$, the Q-function is a one-step dynamics model; at $\tau = T$, it is a long-horizon reachability predictor. Value functions are world models operating at different time scales.</p>
+
+    <p><strong>Direct collocation with TDMs</strong> uses the goal-conditioned Q-function as the dynamics constraint in a hierarchical planning framework:</p>
+
+    $$a_t = \underset{a_{t:K:t+T}, s_{t+K:K:t+T}}{\arg\max} \sum_{i=t, t+K, \ldots, t+T} r_c(s_i, a_i)$$
+    $$\text{such that } Q(s_i, a_i, s_{i+K}, K-1) = 0 \;\; \forall \; i \in \{t, t+K, \ldots, t+T-K\}$$
+
+    <h3 id="generalized-decision-transformers">Generalized Decision Transformers</h3>
+
+    <p><strong>Generalized Decision Transformers</strong> (Furuta, Matsuo, Gu, ICLR 2022 Spotlight) provide a unifying framework that views many offline RL methods through the lens of <strong>hindsight information matching</strong>:</p>
+
+    <ul>
+      <li><strong>Training:</strong> behavioral cloning conditioned on "any future statistics" $\phi_T$&mdash;return-to-go, final state, trajectory statistics, or other summaries of what happened after the action.</li>
+      <li><strong>Test-time:</strong> provide an unseen future statistic (e.g., a high return-to-go) and ask the model to "generalize"&mdash;producing behavior that achieves it.</li>
+    </ul>
+
+    <p>The architecture uses a <strong>causal transformer</strong> (forward in time) and an <strong>anti-causal aggregator</strong> (backward in time to compute hindsight statistics). This unifies Decision Transformer (Chen et al., 2021), various goal-conditioned methods, and offline RL approaches under a single framework.</p>
+
+    <p>The connection to collocation is deep: a world model is a <em>causal</em> predictor (forward in time), while a Decision Transformer is an <em>anti-causal</em> predictor (conditioned on future outcomes). <strong>Hindsight experience replay is the "Jedi mind trick" to flip the causality</strong>&mdash;turning any trajectory into training signal for the anti-causal direction.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Temporal Difference Models</div>
+      <p>TDMs reinterpret goal-conditioned Q-functions as implicit world models. The Q-function $Q(s_t, a_t, s_g, \tau)$ predicts whether action $a_t$ in state $s_t$ reaches goal $s_g$ in exactly $\tau$ steps. At short horizons, this is a dynamics model; at long horizons, a reachability predictor. Training uses hindsight relabeling: any trajectory provides a positive example for the goal it actually reached.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      A standard value function $V(s)$ compresses environment dynamics into a single scalar. A goal-conditioned $Q(s, a, s_g, \tau)$ retains much more structure&mdash;encoding which states are reachable and in how many steps. Value functions are world models operating at coarser temporal resolution.
+    </div>
+
+    <p>There's a deep duality here: forward world models are <em>causal</em> predictors (past &rarr; future), while Decision Transformers are <em>anti-causal</em> (desired future &rarr; actions). Hindsight experience replay bridges the two by retroactively conditioning on observed outcomes, turning every trajectory into anti-causal training data.</p>
+
+    <!-- Section 8: Video Models as Reasoners -->
+    <h2 id="video-models-as-reasoners">Physical and Symbolic World Models &mdash; Video Models as Reasoners</h2>
+
+    <p>So far we've treated world models as mathematical objects&mdash;dynamics predictors for planning. But what if a world model could <em>see</em>?</p>
+
+    <h3 id="agi-year-zero">2022 &mdash; "AGI Year 0"</h3>
+
+    <p>Shane Gu marks 2022 as a pivotal year where two breakthroughs converged:</p>
+
+    <ol>
+      <li><strong>"LLMs can reason"</strong> &mdash; Zero-shot chain-of-thought (Kojima, Gu et al., 2022): adding "Let's think step by step" to LLM prompts enables multi-step reasoning without any task-specific fine-tuning. This suggests symbolic reasoning is achievable through language models trained purely on prediction.</li>
+      <li><strong>"ImagenVideo / DreamFusion"</strong> &mdash; high-quality video generation and text-to-3D synthesis suggest physical reasoning is achievable through video models trained on internet-scale visual data.</li>
+    </ol>
+
+    <p>Together, these results sketch a division of labor: LLMs handle symbolic reasoning via <strong>Chain-of-Thought</strong> (chains of logical deductions in language), while video models handle spatiotemporal reasoning via <strong>Chain-of-Frames</strong> (step-by-step visual simulations). The world consists of symbols, space, and time&mdash;and we may need both types of models to capture its full complexity.</p>
+
+    <h3 id="video-foundation-models">2025 &mdash; Video Models as the Missing Foundation Model</h3>
+
+    <p>Wiedemer, Li, Vicol, Gu et al. (Google DeepMind, 2025) push this vision further: <strong>"Video models are zero-shot learners and reasoners."</strong> Just as LLMs went from task-specific NLP to general-purpose language understanding by scaling up, video models may follow the same path for vision and physical understanding. They can already solve maze navigation, pattern completion, and physical reasoning tasks zero-shot&mdash;without any task-specific training.</p>
+
+    <p>What about combining both modalities? <strong>Mind's Eye</strong> (Liu et al., 2022) augments chain-of-thought reasoning with a physics simulator (MuJoCo) as a tool. LLMs alone make physical reasoning errors&mdash;predicting that heavier objects fall faster, for instance&mdash;but augmenting them with a physics engine for "mental simulation" yields correct answers.</p>
+
+    <p>This raises a provocative question. Specialized approaches like graph neural networks for fluid simulation (Sanchez-Gonzalez et al., 2020) work well in their domains. But Shane Gu conjectures: <em>"We likely won't need graph nets, NeRF, etc. Just video models."</em> Whether highly structured domains like protein folding will also succumb to general-purpose video prediction remains open.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      LLMs reason through <em>symbolic</em> chains of thought&mdash;step-by-step logical deductions. Video models reason through <em>physical</em> chains of frames&mdash;step-by-step spatiotemporal simulations. A complete world model may need both: symbolic reasoning for abstract planning, visual reasoning for physical grounding.
+    </div>
+
+    <p>Shane Gu makes a bold conjecture: sufficiently powerful video models, trained on internet-scale visual data, may learn to simulate physics, chemistry, and biology without domain-specific inductive biases&mdash;just as LLMs learned grammar and reasoning from raw text. Whether structured domains like protein folding will also succumb to this trend remains open.</p>
+
+    <!-- Section 9: The Future of World Modeling -->
+    <h2 id="future-of-world-modeling">The Future of World Modeling</h2>
+
+    <p>Where is all of this heading? Shane Gu closes with two speculative frontiers.</p>
+
+    <p><strong>Modeling humanity (2026+).</strong> What if we could simulate eight billion people? Joon Sung Park's work on generative agents showed that LLM-powered characters exhibit emergent social behavior in simulated villages. The ambition goes further: social simulation, political dynamics, economic systems&mdash;world models for the human world.</p>
+
+    <p><strong>Modeling financial markets (2026+).</strong> AIA Forecaster (Alur, Stadie et al., Bridgewater AIA Labs, 2025) tackles one of the most complex, non-stationary environments imaginable. Multiple agents search for information, make forecasts, calibrate confidence, reconcile disagreements, and produce calibrated predictions. It's agentic world modeling in practice&mdash;multiple models collaborating to predict an environment that is actively trying to be unpredictable.</p>
+
+    <p>Shane Gu's parting message ties everything together: <strong>"Remember Level 3."</strong> The most ambitious form of world modeling isn't just predicting the world&mdash;it's shaping the world to be predictable.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>The ultimate world model.</strong> Shane Gu's three levels of prediction form a progression of ambition: passively predict the world (Level 1), actively explore to improve predictions (Level 2), and reshape the world to match your model (Level 3). Most AI research operates at Level 1. The frontier of world modeling &mdash; and perhaps of artificial general intelligence &mdash; lies at Level 3: agents that don't just model the world but actively shape it.</p>
+    </div>
+
+    <!-- Section 10: Summary -->
+    <h2 id="summary">Summary</h2>
+
+    <p>We've taken a sweeping tour of world modeling&mdash;from philosophical foundations to speculative frontiers.</p>
+
+    <p>The deep lesson from Solomonoff induction: <strong>prediction = understanding</strong>. Optimal prediction requires inferring compact causal programs, which is why next-token prediction yields reasoning and video prediction yields physics understanding. But prediction only generalizes when it captures <em>causal</em> structure rather than spurious correlations&mdash;diversity of training data is the key.</p>
+
+    <p>Shane Gu's three levels of prediction form a hierarchy of agency: passively fit a model (pretraining), actively collect data to improve it (exploration), and reshape the world itself (empowerment). Most AI research lives at Level 1. The frontier is Level 3.</p>
+
+    <p>On the technical side, forward models enable shooting-based planning while inverse models enable collocation&mdash;temporarily relaxing physics to find solutions, then tightening constraints. Value functions turn out to be world models at coarser temporal resolution, and Decision Transformers are anti-causal world models trained through hindsight. Looking ahead, video models may become the foundation model for physical reasoning, just as LLMs became the foundation for symbolic reasoning.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="../index.html">
+      <span class="nav-dir">&larr;</span>
+      <span class="nav-title">All Modules</span>
+    </a>
+    <span></span>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

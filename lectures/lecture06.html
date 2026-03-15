@@ -77,18 +77,20 @@
       Therefore, subtracting $b(s_t)$ from the return does not change the expected value of the policy gradient estimator.
     </div>
 
-    <div class="proof">
-      <div class="proof-label">Proof</div>
-      <p>We break the expectation over the full trajectory into nested expectations. Since $b(s_t)$ depends only on $s_t$ (and the history up to $s_t$), and $\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)$ depends on $a_t$ given $s_t$, we can condition on the history up to state $s_t$ and marginalize over the action:</p>
+    <details class="proof">
+      <summary>Proof</summary>
+      <div class="proof-content">
+        <p>We break the expectation over the full trajectory into nested expectations. Since $b(s_t)$ depends only on $s_t$ (and the history up to $s_t$), and $\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)$ depends on $a_t$ given $s_t$, we can condition on the history up to state $s_t$ and marginalize over the action:</p>
 
-      $$\mathbb{E}_\tau\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, b(s_t)\right] = \mathbb{E}_{s_{0:t}, a_{0:(t-1)}}\!\left[b(s_t)\, \mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right]\right]$$
+        $$\mathbb{E}_\tau\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\, b(s_t)\right] = \mathbb{E}_{s_{0:t}, a_{0:(t-1)}}\!\left[b(s_t)\, \mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right]\right]$$
 
-      <p>Now we evaluate the inner expectation over $a_t$. Using the likelihood ratio identity in reverse:</p>
+        <p>Now we evaluate the inner expectation over $a_t$. Using the likelihood ratio identity in reverse:</p>
 
-      $$\mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right] = \sum_a \pi(a \mid s_t;\, \theta)\, \frac{\nabla_\theta \pi(a \mid s_t;\, \theta)}{\pi(a \mid s_t;\, \theta)} = \sum_a \nabla_\theta \pi(a \mid s_t;\, \theta) = \nabla_\theta \sum_a \pi(a \mid s_t;\, \theta) = \nabla_\theta\, 1 = 0$$
+        $$\mathbb{E}_{a_t}\!\left[\nabla_\theta \log \pi(a_t \mid s_t;\, \theta)\right] = \sum_a \pi(a \mid s_t;\, \theta)\, \frac{\nabla_\theta \pi(a \mid s_t;\, \theta)}{\pi(a \mid s_t;\, \theta)} = \sum_a \nabla_\theta \pi(a \mid s_t;\, \theta) = \nabla_\theta \sum_a \pi(a \mid s_t;\, \theta) = \nabla_\theta\, 1 = 0$$
 
-      <p>Since the inner expectation is zero regardless of $s_t$, the entire expression vanishes. $\square$</p>
-    </div>
+        <p>Since the inner expectation is zero regardless of $s_t$, the entire expression vanishes. $\square$</p>
+      </div>
+    </details>
 
     <h3 id="optimal-baseline">The Optimal Baseline</h3>
 

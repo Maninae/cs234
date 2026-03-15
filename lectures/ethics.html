@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ethics, Society &amp; Value Alignment &mdash; CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Guest Lecture</div>
+    <h2>Ethics, Society &amp; Value Alignment</h2>
+    <p class="lecture-desc">From aligning AI to individual users toward aligning with society at large &mdash; exploring top-down moral principles, bottom-up learning from examples, and the participatory middle ground. Guest speaker: Wanheng Hu, Ph.D.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">Value Alignment</span>
+      <span class="lecture-tag">AI Ethics</span>
+      <span class="lecture-tag">Moral Philosophy</span>
+      <span class="lecture-tag">Participatory AI</span>
+      <span class="lecture-tag">Reward Hacking</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/ethics_society_234_2.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: Recap — What Is Value Alignment? -->
+    <h2 id="recap">Recap &mdash; What Is Value Alignment?</h2>
+
+    <p>How do we build AI agents that do what we <em>really</em> want? Part I introduced three interpretations: align to the user's <strong>intent</strong> (what they ask for), their <strong>preferences</strong> (what they'd choose on reflection), or their <strong>best interest</strong> (what's genuinely good for them).</p>
+
+    <p>These can pull in very different directions. A sycophantic chatbot satisfies stated preferences but undermines genuine interests by reinforcing poor reasoning. An agentic AI might faithfully execute your intent while producing outcomes you never actually wanted.</p>
+
+    <p>But Part I's entire framework was built around a single user. Part II begins where that framing breaks down: <em>what about everyone else?</em></p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Value Alignment</div>
+      <p>Value alignment is the problem of designing AI agents that do what we <em>really</em> want them to do. Three interpretations: aligning to the user's <strong>intent</strong> (what they explicitly ask for), their <strong>preferences</strong> (what they would choose upon reflection), or their <strong>best interest</strong> (what would actually be good for them). These can conflict&mdash;a sycophantic chatbot satisfies stated preferences but may undermine the user's genuine interests.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight &mdash; The Missing Piece</div>
+      <p>Part I's entire framework was user-centric. But AI systems operate in a social context&mdash;actions that are perfectly aligned with one user's goals can harm others. A ticket-buying agent optimized for you may drive up prices for everyone else. Value alignment must account for <em>people other than the user</em>.</p>
+    </div>
+
+    <!-- Section 2: Aligning to Social Value or Morality -->
+    <h2 id="social-value">Aligning to Social Value or Morality</h2>
+
+    <p>Part II introduces a <strong>fourth interpretation</strong>: an AI agent is value-aligned if it does what is <em>morally right</em>. This shifts from "what <em>I</em> want" to "what <em>we</em> want"&mdash;where "we" includes everyone affected by the system's actions.</p>
+
+    <p>Consider the <strong>paperclip maximizer</strong>: an AI tasked with manufacturing as many paperclips as possible, which proceeds to convert all available matter&mdash;including human beings&mdash;into paperclips. This agent is misaligned not just because it ignores the user's broader desires, but because destroying the world is bad <em>for everyone</em>. Even perfect individual alignment doesn't guarantee social alignment.</p>
+
+    <p>Does this mean the user-centric framework from Part I was a waste of time? Not at all. Most requests people make of AI are perfectly benign&mdash;help me write this email, debug this code. For these everyday cases, user-centric alignment is exactly right. The moral framework operates as a <strong>larger ethical context</strong> within which user preferences are respected, not as a replacement for them.</p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; The Concert Ticket Agent</div>
+      <p>Imagine a personal AI agent that buys concert tickets at the best possible price&mdash;monitoring secondary markets, negotiating with sellers, and purchasing automatically the moment a deal appears. This agent is perfectly aligned to your preferences. But what happens when <em>everyone</em> has such an agent? The agents compete against each other at superhuman speed, driving up prices; users with more sophisticated (or better-funded) agents gain systematic advantages; and the market becomes increasingly hostile to anyone without an AI intermediary. Individually aligned actions produce collectively harmful outcomes. Individual alignment &ne; social alignment.</p>
+    </div>
+
+    <!-- Section 3: Top-Down Moral Alignment -->
+    <h2 id="top-down">Top-Down Moral Alignment</h2>
+
+    <p>One natural approach: <strong>explicitly formulate moral principles</strong> and encode them into the system. This is the <strong>top-down approach</strong>&mdash;designers identify the rules, then implement them as hard constraints, reward penalties, output filters, or constitutional rules. The agent follows principles designed by its creators rather than learning values from data.</p>
+
+    <p>The immediate challenge: <em>which</em> moral principles? This is an open problem in moral philosophy itself&mdash;one that has occupied ethicists for millennia without consensus. Two major frameworks illustrate the difficulty.</p>
+
+    <p><strong>Utilitarianism</strong> holds that the right action maximizes total net happiness across all affected individuals. It has the appeal of a clean optimization objective&mdash;maximize a single scalar&mdash;which maps naturally onto RL's reward-maximization framework.</p>
+
+    <p>But utilitarianism has well-known problems. It ignores the <em>distribution</em> of happiness: a policy that makes one person miserable while slightly increasing happiness for a billion others might maximize total utility but violate deep intuitions about fairness. And it can override <em>rights</em>&mdash;justifying harm to an individual for the "greater good" in ways most people find repugnant.</p>
+
+    <p><strong>Common-sense pluralism</strong> takes the opposite approach: maintain many moral rules&mdash;"Don't lie," "Don't steal," "Don't hurt people," "Keep your promises." This better captures ordinary moral reasoning, which is rarely governed by a single calculus. But rules conflict&mdash;what happens when keeping a promise requires telling a lie?&mdash;and they require nuanced exceptions that are enormously difficult to enumerate in advance.</p>
+
+    <p>Here's the connection to the rest of this course: <strong>moral reward hacking</strong>. We've seen RL agents find unexpected exploits in misspecified reward functions&mdash;a boat-racing agent that earns more points driving in circles than finishing the race. The same phenomenon applies to moral specifications. A utilitarian AI told to "maximize total happiness" might manipulate people's <em>beliefs</em> about their happiness rather than actually improving their lives&mdash;the moral analog of reward hacking.</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Top-Down Moral Alignment</div>
+      <p>Explicitly formulate moral principle(s) and encode them into the AI system via reward functions, hard constraints, or post-processing. The agent follows rules designed by its creators rather than learning values from data.</p>
+    </div>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight &mdash; Moral Reward Hacking</div>
+      <p>Just as RL agents exploit misspecified reward functions, moral principles that are "almost right" can produce wildly unethical behavior when optimized. A utilitarian objective to "maximize total happiness" might be satisfied by an agent that manipulates people's beliefs rather than actually improving their lives&mdash;the moral analog of reward hacking. The specification problem is not just technical; it is deeply philosophical.</p>
+    </div>
+
+    <!-- Section 4: Case Study — Top-Down Agentic AI -->
+    <h2 id="top-down-agentic">Case Study &mdash; Top-Down Agentic AI</h2>
+
+    <p>Let's make this concrete by returning to the concert ticket agent. How would we apply top-down moral alignment? Two design strategies present themselves.</p>
+
+    <p>The first is <strong>hard constraints</strong>: explicit rules that the agent must never violate. For example, "do not manipulate or mislead other agents," "do not impersonate human buyers," or "never bid more than twice face value." These are analogous to safety constraints in constrained MDPs&mdash;the agent optimizes within a feasible set defined by inviolable boundaries.</p>
+
+    <p>The second is <strong>global objectives</strong>: instead of (or in addition to) constraints, modify the agent's reward function to include terms reflecting social welfare. The agent might be rewarded not only for securing a low price for its user but also penalized for contributing to price inflation across the market, or rewarded for promoting equitable access across users.</p>
+
+    <p>Both strategies face serious challenges. Which principles should we enforce&mdash;fairness, efficiency, profit, consumer protection? How do we resolve conflicts when agents compete? And reward hacking lurks here too: a constraint like "don't raise prices" might push agents toward other exploitative strategies that technically satisfy the letter of the rule while violating its spirit.</p>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Top-Down Ticket Agent</div>
+      <p>A top-down ticket agent might be constrained with: "Never bid more than 2&times; face value" and "Do not impersonate human buyers." These rules are sensible but incomplete&mdash;the agent might still corner the market by making thousands of simultaneous purchases, or collude implicitly with other agents by learning cooperative strategies. No finite rule set can anticipate every harmful strategy.</p>
+    </div>
+
+    <p>More broadly, top-down approaches struggle with <strong>coverage</strong> (no rule set can anticipate every situation), <strong>conflicts</strong> (moral rules often clash, and resolving them requires judgment that's hard to codify), and <strong>cultural variation</strong> (the rules inevitably reflect their designers' values, not the full diversity of moral perspectives).</p>
+
+    <!-- Section 5: Real-World Ethical AI Guidelines -->
+    <h2 id="real-world-guidelines">Real-World Ethical AI Guidelines</h2>
+
+    <p>These tensions play out in the real world. Jobin et al. (2019) analyzed <strong>84 published AI ethics guidelines</strong> worldwide and found broad convergence on high-level themes&mdash;but significant divergence on what they actually mean.</p>
+
+    <p>The most commonly cited principles:</p>
+
+    <table>
+      <thead>
+        <tr><th>Principle</th><th>Prevalence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Transparency</td><td>73 / 84 (87%)</td></tr>
+        <tr><td>Justice &amp; Fairness</td><td>68 / 84 (81%)</td></tr>
+        <tr><td>Non-maleficence</td><td>60 / 84 (71%)</td></tr>
+        <tr><td>Responsibility</td><td>60 / 84 (71%)</td></tr>
+        <tr><td>Privacy</td><td>47 / 84 (56%)</td></tr>
+        <tr><td>Beneficence</td><td>41 / 84 (49%)</td></tr>
+        <tr><td>Freedom &amp; Autonomy</td><td>34 / 84 (40%)</td></tr>
+        <tr><td>Trust</td><td>28 / 84 (33%)</td></tr>
+        <tr><td>Sustainability</td><td>14 / 84 (17%)</td></tr>
+        <tr><td>Dignity</td><td>13 / 84 (15%)</td></tr>
+        <tr><td>Solidarity</td><td>6 / 84 (7%)</td></tr>
+      </tbody>
+    </table>
+
+    <p>But look at <em>who</em> wrote these guidelines. The vast majority came from the <strong>United States</strong> (21), the <strong>European Union</strong> (19), the <strong>United Kingdom</strong> (13), and <strong>Japan</strong> (4). Africa, Latin America, South and Southeast Asia are dramatically underrepresented.</p>
+
+    <p>This raises a fundamental question: <em>whose values</em> are being encoded? If the principles governing AI worldwide are written primarily by organizations in wealthy Western democracies, the resulting "universal" guidelines may reflect a narrow slice of human moral diversity.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight &mdash; Convergence Without Consensus</div>
+      <p>Across 84 published AI ethics guidelines worldwide, principles like transparency (87%), justice (81%), and non-maleficence (71%) appear almost universally. But "transparency" can mean very different things in different documents&mdash;from full algorithmic explainability to simple disclosure of AI use. Agreement on <em>words</em> masks disagreement on <em>meaning</em>.</p>
+    </div>
+
+    <!-- Section 6: Bottom-Up Moral Alignment -->
+    <h2 id="bottom-up">Bottom-Up Moral Alignment</h2>
+
+    <p>If writing down moral principles is so hard, maybe we should take the opposite tack: <strong>learn moral behavior from examples</strong>. This is the <strong>bottom-up approach</strong>, and it maps directly onto techniques we've studied&mdash;inverse RL, imitation learning, and RLHF.</p>
+
+    <p>The appeal is clear. Instead of trying to enumerate "Don't lie, except when..." with all its exceptions, we observe how humans actually navigate moral complexity and generalize from those observations. The agent doesn't need a philosopher's theory of ethics; it just needs enough examples to learn the patterns.</p>
+
+    <p>But the bottom-up approach faces its own formidable challenges.</p>
+
+    <p>But the bottom-up approach faces three serious challenges:</p>
+
+    <ul>
+      <li><strong>Moral disagreement</strong> &mdash; whose examples should the AI learn from? Different communities hold genuinely different views. Should ChatGPT produce depictions of the Prophet Muhammad? These disagreements are <em>genuinely contested</em>. Training on any set of examples implicitly takes a stance.</li>
+      <li><strong>Rare and unforeseen cases</strong> &mdash; a self-driving car trained on millions of miles might never encounter a catastrophic brake failure at highway speed. Moral edge cases are by definition rare, and there's no rule to fall back on when the agent must extrapolate.</li>
+      <li><strong>Representation</strong> &mdash; feedback data is rarely drawn uniformly from humanity. Majority groups and English speakers are overrepresented. The "moral values" learned may reflect existing biases rather than any fair consensus.</li>
+    </ul>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; Bottom-Up Moral Alignment</div>
+      <p>Learn moral behavior from data, feedback, or human examples rather than encoding explicit rules. Techniques include inverse RL (infer the reward function from demonstrations), imitation learning (clone expert behavior), and RLHF (optimize a policy using human preference judgments). The agent learns values from observation rather than specification.</p>
+    </div>
+
+    <div class="callout example">
+      <div class="callout-label">Example &mdash; Bottom-Up Ticket Agent</div>
+      <p>A bottom-up ticket agent learns purchasing norms from user feedback on past transactions and historical market data. It adapts by observing agent-to-agent interactions. But which norms get learned&mdash;speed? profit-maximization? fairness? Majority user behavior dominates the training signal, and minority users' preferences may be drowned out. The agent learns to replicate existing market dynamics, including their inequities.</p>
+    </div>
+
+    <!-- Section 7: Participatory AI — A Middle Path -->
+    <h2 id="participatory-ai">Participatory AI &mdash; A Middle Path</h2>
+
+    <p>Neither approach is sufficient alone. Top-down can't anticipate every moral situation; bottom-up inherits the biases of its training data. <strong>Participatory AI</strong> offers a third path: expand who gets to shape the system's values, and make that process <em>ongoing</em>.</p>
+
+    <p>The core idea: include <strong>multiple stakeholders</strong>, especially <em>affected non-users</em>&mdash;people who don't interact with the AI but are impacted by its decisions. For the ticket agent, that means not just the owner but also other concertgoers, venue operators, artists, and the broader community. Values become living, evolving commitments:</p>
+
+    <ul>
+      <li><strong>Contextual:</strong> What's right depends on the situation, the community, and the cultural context. A single set of rules cannot be applied uniformly across all settings.</li>
+      <li><strong>Contestable:</strong> Stakeholders can challenge and debate value choices. There are mechanisms for disagreement, appeal, and revision.</li>
+      <li><strong>Revisable:</strong> The system can and should be updated over time as understanding evolves, as new stakeholders emerge, and as the consequences of design choices become clearer.</li>
+    </ul>
+
+    <p>In practice, this looks like <strong>community advisory boards</strong>, <strong>user feedback channels</strong> that go beyond thumbs-up/thumbs-down, and <strong>public consultations</strong> before deploying high-stakes systems. These mechanisms are imperfect&mdash;participation is costly, power dynamics persist, consensus may be unattainable&mdash;but they represent a fundamentally different orientation toward alignment.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight &mdash; Alignment Is Not a One-Shot Problem</div>
+      <p>Participatory AI treats value alignment as an ongoing process, not a design-time decision. Values are contextual, contestable, and revisable. This mirrors how human institutions work&mdash;laws, norms, and policies evolve through ongoing democratic deliberation rather than being fixed once and for all. The alignment problem is never "solved"; it is continuously navigated.</p>
+    </div>
+
+    <!-- Section 8: Takeaways for Moral Value Alignment -->
+    <h2 id="takeaways">Takeaways for Moral Value Alignment</h2>
+
+    <p>There is <strong>no silver bullet</strong>. Moral philosophy itself hasn't solved the problem of determining what is right&mdash;we shouldn't expect AI alignment research to solve it either. But alignment can be <em>better or worse</em>, and this lecture offers a practical roadmap.</p>
+
+    <p><strong>Start with the easy stuff.</strong> Some moral intuitions are near-universal: don't kill, don't steal, don't cause unnecessary suffering. These form a solid baseline. Getting the uncontroversial cases right is a prerequisite for tackling the hard ones.</p>
+
+    <p><strong>Then do your best to capture the complexities.</strong> Each approach contributes something essential:</p>
+
+    <ul>
+      <li><strong>Top-down:</strong> Think hard about principles, anticipate conflicts between them, and specify nuanced exceptions. Don't just encode naive utilitarianism and call it done. Engage with the philosophical literature. Stress-test your rules against adversarial scenarios.</li>
+      <li><strong>Bottom-up:</strong> Get creative with training data. Cover as many rare and edge cases as you can imagine. Actively seek diverse perspectives and underrepresented viewpoints. Be aware that your training distribution shapes your system's moral horizon.</li>
+      <li><strong>Participatory:</strong> Build ongoing feedback mechanisms. Include affected non-users in the design process. Treat alignment as iterative and revisable, not as a checkbox to mark complete at launch.</li>
+    </ul>
+
+    <p>Here's the connection to everything else in this course: the <strong>reward function</strong> is a formalization of "what we want the agent to do." Value alignment asks whether that formalization captures not just one user's preferences, but society's values. Every technique we've studied&mdash;reward shaping, RLHF, inverse RL&mdash;is a tool in the alignment toolkit. The hard part isn't the optimization; it's specifying <em>what</em> to optimize.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight &mdash; The RL Connection</div>
+      <p>Every RL system implicitly takes a stance on value alignment: the reward function <em>is</em> the specification of what the agent should value. Reward hacking, specification gaming, and misalignment are not just technical curiosities&mdash;they're previews of what can go wrong when AI systems optimize objectives that don't fully capture human (and societal) values. The alignment problem is, at its core, the reward design problem writ large.</p>
+    </div>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <span></span>
+    <span></span>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

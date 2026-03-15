@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles/shared.css">
 </head>
-<body>
+<body class="page-index">
 
 <!-- Mobile menu -->
 <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">
@@ -143,7 +143,7 @@ const modules = [
     lectures: [
       { label: 'Lecture 5', file: 'lectures/lecture05.html' },
       { label: 'Lecture 6', file: 'lectures/lecture06.html' },
-      { label: 'Lecture 7', file: 'lectures/lecture07.html' }
+      { label: 'Lecture 7 (PPO & GAE)', file: 'lectures/lecture07.html#ppo' }
     ],
     readings: [
       { text: 'SB Chapter 13', type: 'book' }
@@ -158,7 +158,7 @@ const modules = [
       <p>When environment interaction is expensive or risky, we can learn from expert demonstrations (behavioral cloning, DAgger) or from fixed datasets of prior experience (batch/offline RL). Covers distribution shift, conservative policy updates, and practical considerations.</p>
     `,
     lectures: [
-      { label: 'Lecture 7', file: 'lectures/lecture07.html' },
+      { label: 'Lecture 7 (Imitation Learning)', file: 'lectures/lecture07.html#imitation-learning' },
       { label: 'Lecture 8', file: 'lectures/lecture08.html' }
     ],
     readings: []
@@ -174,11 +174,52 @@ const modules = [
     lectures: [
       { label: 'Lecture 9', file: 'lectures/lecture09.html' },
       { label: 'Lecture 10', file: 'lectures/lecture10.html' },
-      { label: 'Lecture 11', file: 'lectures/lecture11.html' }
+      { label: 'Lecture 11', file: 'lectures/lecture11.html' },
+      { label: 'Lecture 12', file: 'lectures/lecture12.html' }
     ],
     readings: [
       { text: 'Bandit Algorithms, \u00A77.1', type: 'link', url: 'https://tor-lattimore.com/downloads/book/book.pdf' }
     ]
+  },
+  {
+    id: 'ethics',
+    num: '08',
+    title: 'Ethics & Value Alignment',
+    subtitle: 'Societal impact & aligning RL agents with human values',
+    description: `
+      <p>RL systems increasingly affect real lives, raising questions about fairness, safety, and accountability. Covers top-down and bottom-up approaches to value alignment, reward misspecification, and the societal implications of deploying autonomous decision-makers.</p>
+    `,
+    lectures: [
+      { label: 'Guest: Ethics & Society', file: 'lectures/ethics.html' }
+    ],
+    readings: []
+  },
+  {
+    id: 'mcts',
+    num: '09',
+    title: 'Monte Carlo Tree Search',
+    subtitle: 'Simulation-based search & game-playing agents',
+    description: `
+      <p>Simulation-based planning without a learned model. Covers the MCTS framework, the UCT algorithm that balances exploration and exploitation in the search tree, and how AlphaGo and AlphaZero combined MCTS with deep RL to achieve superhuman game play.</p>
+    `,
+    lectures: [
+      { label: 'Lecture 13', file: 'lectures/lecture13.html' },
+      { label: 'Lecture 14', file: 'lectures/lecture14.html' }
+    ],
+    readings: []
+  },
+  {
+    id: 'world-modeling',
+    num: '10',
+    title: 'World Modeling',
+    subtitle: 'Learned world models & predictive representations',
+    description: `
+      <p>Learning a model of the environment to plan and reason internally. Covers Solomonoff induction, forward and inverse models, video prediction models, and how learned world models enable sample-efficient planning and transfer.</p>
+    `,
+    lectures: [
+      { label: 'Guest: World Modeling', file: 'lectures/world-modeling.html' }
+    ],
+    readings: []
   }
 ];
 

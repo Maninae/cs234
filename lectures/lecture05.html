@@ -237,7 +237,7 @@
 
     $$\nabla_\theta J(\theta) = \mathbb{E}\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t) \sum_{t'=t}^{T-1} r_{t'}\right] = \mathbb{E}\!\left[\sum_{t=0}^{T-1} \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, G_t\right]$$
 
-    <p>where $G_t = \sum_{t'=t}^{T-1} r_{t'}$ is the <strong>return</strong> from time step $t$. This gives us the REINFORCE algorithm.</p>
+    <p>where $G_t = \sum_{t'=t}^{T-1} r_{t'}$ is the <strong>return</strong> (undiscounted, i.e. $\gamma = 1$, appropriate for the finite-horizon episodic setting) from time step $t$. This gives us the REINFORCE algorithm.</p>
 
     <div class="algorithm">
       <div class="algorithm-title">REINFORCE (Monte Carlo Policy Gradient)</div>

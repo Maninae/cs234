@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture 14: AlphaGo, AlphaGo Zero &amp; AlphaZero &mdash; CS234</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<link rel="stylesheet" href="../styles/shared.css">
+</head>
+<body>
+
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="Toggle menu"><span></span></button>
+<div class="menu-overlay" onclick="toggleSidebar()"></div>
+<div class="progress-bar"><div class="bar"></div></div>
+
+<aside class="sidebar">
+  <div class="sidebar-header">
+    <div class="course-code">Stanford CS234</div>
+    <h1><a href="../index.html">Reinforcement Learning</a></h1>
+    <div class="term">Winter 2026</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="sidebar-footer"><a href="../index.html">&larr; All Modules</a></div>
+</aside>
+
+<div class="main">
+  <div class="lecture-header">
+    <div class="lecture-eyebrow">Lecture 14</div>
+    <h2>AlphaGo, AlphaGo Zero &amp; AlphaZero</h2>
+    <p class="lecture-desc">From the game of Go to general game-playing: how AlphaGo combined deep neural networks with MCTS, how AlphaGo Zero eliminated human data through pure self-play, and how AlphaZero generalized across chess, shogi, and Go.</p>
+    <div class="lecture-tags">
+      <span class="lecture-tag">MCTS</span>
+      <span class="lecture-tag">AlphaGo</span>
+      <span class="lecture-tag">AlphaZero</span>
+      <span class="lecture-tag">Self-Play</span>
+      <span class="lecture-tag">PUCT</span>
+      <span class="lecture-tag">Deep RL</span>
+    </div>
+    <a class="lecture-pdf-link" href="../slides/lecture14pre.pdf" target="_blank">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Original PDF slides
+    </a>
+  </div>
+
+  <article class="lecture-article">
+
+    <!-- Section 1: Why Go? -->
+    <h2 id="why-go">Why Go?</h2>
+
+    <p>Go stood for decades as AI's grand challenge. IBM's Deep Blue conquered chess in 1997 through brute-force search with handcrafted evaluation&mdash;but that same approach failed catastrophically in Go. Why?</p>
+
+    <p>Scale is part of the answer: chess has ~35 legal moves per position; Go has ~250. A typical chess game lasts ~80 moves; Go ~150. The game tree ($\sim 250^{150}$ nodes) dwarfs anything brute-force can handle. But the difficulty runs deeper. In chess, positions can be evaluated by counting material and assessing structure. In Go, positional judgment is <em>holistic</em>&mdash;the value of a stone depends on global patterns of influence and territory that resisted decades of handcrafted heuristics.</p>
+
+    <p>From an RL perspective, Go is simply a very large, very hard MDP with delayed, binary reward. The agent must learn a policy mapping board positions to moves that maximizes the probability of winning.</p>
+
+    <!-- Section 2: MCTS Advantages (Recap) -->
+    <h2 id="mcts-advantages">MCTS Advantages (Recap)</h2>
+
+    <p>As we saw last lecture, MCTS is perfectly suited here: selective search, dynamic evaluation through simulation, sampling instead of exhaustive enumeration, black-box compatible, anytime, and parallelizable. These properties made MCTS the dominant paradigm for computer Go even before deep learning.</p>
+
+    <p>What AlphaGo added: a way to make MCTS <em>dramatically</em> more efficient by replacing random rollouts and uniform priors with learned neural network estimates.</p>
+
+    <!-- Section 3: AlphaGo Zero's MCTS with Neural Networks -->
+    <h2 id="alphago-mcts">AlphaGo Zero's MCTS with Neural Networks</h2>
+
+    <p>The core technical contribution of AlphaGo Zero (Silver et al., <em>Nature</em>, 2017) is the tight integration of a deep neural network $f_\theta$ with Monte Carlo Tree Search. The network takes a board state $s$ as input and outputs two quantities simultaneously:</p>
+
+    $$f_\theta(s) = (\mathbf{p}, v)$$
+
+    <p>where $\mathbf{p}$ is a probability vector over legal moves (the <strong>prior policy</strong>) and $v \in [-1, 1]$ is a scalar estimate of the value&mdash;the probability of winning from state $s$. This dual-headed architecture is central: a single forward pass provides both the intuition for <em>which</em> moves to consider and the judgment for <em>how good</em> a position is.</p>
+
+    <p>The MCTS procedure repeats four phases, typically 1,600 times per move decision:</p>
+
+    <h3 id="phase-select">Phase 1: Select</h3>
+
+    <p>Starting from the root (the current board position), traverse the tree by selecting at each internal node the action that maximizes a variant of the <strong>PUCT</strong> (Predictor + Upper Confidence Bound for Trees) formula:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; PUCT Selection Rule</div>
+      <p>At each internal node during tree traversal, select the action maximizing:</p>
+      $$a_t = \arg\max_a \left[ Q(s, a) + c_{\text{puct}} \cdot P(s, a) \cdot \frac{\sqrt{\sum_b N(s, b)}}{1 + N(s, a)} \right]$$
+      <p>where:</p>
+      <ul>
+        <li>$Q(s, a)$ is the mean value of all simulations that passed through action $a$ from state $s$</li>
+        <li>$P(s, a)$ is the prior probability from the neural network's policy head</li>
+        <li>$N(s, a)$ is the visit count for action $a$ from state $s$</li>
+        <li>$c_{\text{puct}}$ is an exploration constant</li>
+      </ul>
+      <p>The first term <strong>exploits</strong>&mdash;prefer actions with high estimated value. The second term <strong>explores</strong>&mdash;prefer actions with high prior probability that have been visited relatively few times. As $N(s,a)$ grows, the exploration bonus shrinks and the algorithm focuses on the empirically best action.</p>
+    </div>
+
+    <p>The tree alternates between the agent's moves (maximizing) and the opponent's moves (also maximizing from their perspective), mimicking a minimax structure. At each level, the PUCT formula guides search toward the most promising continuations.</p>
+
+    <h3 id="phase-expand">Phase 2: Expand and Evaluate</h3>
+
+    <p>When a leaf node $s_L$ is reached&mdash;a position not yet in the tree&mdash;expand it by querying the neural network:</p>
+
+    $$(\mathbf{p}, v) = f_\theta(s_L)$$
+
+    <p>Store the prior probabilities $P(s_L, a) = p_a$ for all legal actions $a$. The value estimate $v$ replaces the need for a random rollout to a terminal state&mdash;this is a key difference from vanilla MCTS. Instead of playing out random moves to estimate who wins, a single neural network forward pass provides a learned evaluation that captures strategic understanding far beyond what random play could reveal.</p>
+
+    <p>This is the key architectural insight: instead of playing out random moves to guess who wins, a single network forward pass provides a learned evaluation capturing strategic understanding far beyond what random play could reveal.</p>
+
+    <h3 id="phase-backup">Phase 3: Backup</h3>
+
+    <p>Propagate the value $v$ back up the tree, updating statistics for every edge traversed during the selection phase:</p>
+
+    $$N(s, a) \leftarrow N(s, a) + 1$$
+    $$W(s, a) \leftarrow W(s, a) + v$$
+    $$Q(s, a) \leftarrow \frac{W(s, a)}{N(s, a)}$$
+
+    <p>where $W(s, a)$ is the total value accumulated through that edge. Each backup refines the mean value estimate $Q(s,a)$, and the visit count $N(s,a)$ grows, gradually reducing the exploration bonus in the PUCT formula for frequently visited actions.</p>
+
+    <h3 id="phase-play">Phase 4: Play</h3>
+
+    <p>After all simulations complete, select the move at the root proportional to visit counts:</p>
+
+    $$\pi(s, a) \propto N(s, a)^{1/\tau}$$
+
+    <p>where $\tau$ is a temperature parameter. With $\tau \to 0$, this becomes greedy&mdash;pick the most-visited action. During training, $\tau = 1$ for the first 30 moves (encouraging exploration of diverse openings) and $\tau \to 0$ thereafter (exploiting the search results).</p>
+
+    <p>Notice how PUCT connects back to the bandit theory from Lectures 10&ndash;11. The exploration bonus plays the same role as UCB's confidence interval, but PUCT adds the neural network's prior $P(s,a)$ to bias exploration toward moves the network considers promising&mdash;a form of <em>informed</em> exploration rather than uniform exploration.</p>
+
+    <div class="algorithm">
+      <div class="algorithm-title">AlphaGo Zero MCTS (Single Move Selection)</div>
+      <ol>
+        <li><span class="keyword">Initialize</span> root node $s_{\text{root}}$ with neural network evaluation $f_\theta(s_{\text{root}}) = (\mathbf{p}, v)$.</li>
+        <li><span class="keyword">for</span> simulation $= 1, 2, \ldots, N_{\text{sim}}$ <span class="keyword">do</span></li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>[Select]</strong> Starting from $s_{\text{root}}$, traverse tree by selecting $a = \arg\max\!\left[Q(s,a) + U(s,a)\right]$<br>where $U(s,a) = c_{\text{puct}} \cdot P(s,a) \cdot \frac{\sqrt{\sum_b N(s,b)}}{1 + N(s,a)}$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>[Expand &amp; Evaluate]</strong> At leaf node $s_L$, compute $(\mathbf{p}, v) = f_\theta(s_L)$. Store $P(s_L, a) = p_a$ for all legal $a$.</li>
+        <li style="list-style: none; padding-left: 1.5em;"><strong>[Backup]</strong> For each edge $(s, a)$ on the path from $s_L$ to $s_{\text{root}}$:<br>$N(s,a) \leftarrow N(s,a) + 1$, &ensp; $W(s,a) \leftarrow W(s,a) + v$, &ensp; $Q(s,a) \leftarrow W(s,a) / N(s,a)$.</li>
+        <li><span class="keyword">end for</span></li>
+        <li><span class="keyword">Return</span> $\pi(s_{\text{root}}, a) \propto N(s_{\text{root}}, a)^{1/\tau}$.</li>
+      </ol>
+    </div>
+
+    <!-- Section 4: Self-Play Training -->
+    <h2 id="self-play">Self-Play Training</h2>
+
+    <p>AlphaGo Zero does not learn from human expert games. Instead, it generates its own training data through <strong>self-play</strong>, creating a virtuous cycle between the neural network and MCTS that bootstraps intelligence from scratch.</p>
+
+    <p>The self-play loop proceeds as follows:</p>
+
+    <p><strong>Step 1: Play a game.</strong> At each position $s_t$, run MCTS (using the current network $f_\theta$) to produce a search policy $\pi_t$. Sample an action $a_t \sim \pi_t$. Advance to the next state. Repeat until the game ends, yielding an outcome $z \in \{-1, +1\}$ (loss or win).</p>
+
+    <p><strong>Step 2: Store training data.</strong> Each position generates a training example $(s_t, \pi_t, z)$&mdash;the board state, the MCTS-improved policy, and the eventual game outcome.</p>
+
+    <p><strong>Step 3: Train the network.</strong> Update $f_\theta$ to minimize the combined loss:</p>
+
+    <div class="callout definition">
+      <div class="callout-label">Definition &mdash; AlphaGo Zero Loss Function</div>
+      $$\ell(\theta) = (z - v_\theta(s))^2 - \boldsymbol{\pi}^\top \log \mathbf{p}_\theta(s) + c \|\theta\|^2$$
+      <p>where $z$ is the game outcome, $v_\theta(s)$ is the predicted value, $\boldsymbol{\pi}$ is the MCTS search policy, $\mathbf{p}_\theta(s)$ is the network's prior policy, and $c$ is a regularization coefficient. The <strong>value loss</strong> $(z - v_\theta)^2$ teaches the network to predict who wins. The <strong>policy loss</strong> $-\boldsymbol{\pi}^\top \log \mathbf{p}_\theta$ teaches it to match the refined MCTS policy. The <strong>regularization</strong> $c\|\theta\|^2$ prevents overfitting.</p>
+    </div>
+
+    <p><strong>Step 4: Repeat.</strong> Use the updated network for the next round of self-play. Each iteration produces a strictly stronger player.</p>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>MCTS as a policy improvement operator.</strong> The relationship between the neural network and MCTS is a form of <em>generalized policy iteration</em>&mdash;the same evaluate-improve cycle seen throughout this course. The neural network provides the current policy $\mathbf{p}_\theta$ and value estimate $v_\theta$ (policy evaluation). MCTS uses these to compute an improved policy $\boldsymbol{\pi}$ by looking ahead (policy improvement). Training the network on $\boldsymbol{\pi}$ closes the loop. This bootstrapping effect means the system improves without any external signal beyond the rules of the game.</p>
+    </div>
+
+    <p>Self-play has a subtler benefit too. Because the agent always plays itself, the opponent is always well-matched&mdash;roughly a 50% win rate at every stage. Against a fixed strong opponent, early games would be all losses: sparse, uninformative feedback. Self-play acts as <strong>automatic curriculum learning</strong>, keeping the reward signal dense throughout training.</p>
+
+    <!-- Section 5: From AlphaGo to AlphaGo Zero to AlphaZero -->
+    <h2 id="evolution">From AlphaGo to AlphaGo Zero to AlphaZero</h2>
+
+    <p>One of the most remarkable aspects of this line of work is how much <em>simpler</em> each generation became. Each version achieved stronger results with fewer components and less human knowledge. Let's trace that progression.</p>
+
+    <h3 id="alphago-2016">AlphaGo (2016)</h3>
+
+    <p>The original system that defeated Lee Sedol 4&ndash;1 in a historic match. AlphaGo combined four components:</p>
+
+    <ul>
+      <li>A <strong>supervised learning policy network</strong> trained on millions of human expert games</li>
+      <li>A <strong>reinforcement learning policy network</strong> fine-tuned via self-play against the SL policy</li>
+      <li>A separate <strong>value network</strong> trained to predict game outcomes from positions</li>
+      <li><strong>MCTS</strong> combining both networks with random rollouts for leaf evaluation</li>
+    </ul>
+
+    <p>This was a remarkable achievement, but the system depended heavily on human knowledge: the SL policy network needed 30 million positions from human games, and handcrafted features supplemented the raw board representation.</p>
+
+    <h3 id="alphago-zero-2017">AlphaGo Zero (2017)</h3>
+
+    <p>AlphaGo Zero eliminated all human data and achieved dramatically stronger play. The key simplifications:</p>
+
+    <ul>
+      <li><strong>Single neural network</strong> with dual heads (policy + value) instead of separate networks</li>
+      <li><strong>No human expert games</strong>&mdash;trained entirely from self-play starting from random play</li>
+      <li><strong>No handcrafted features</strong>&mdash;raw board position as input (stone positions only)</li>
+      <li><strong>No random rollouts</strong>&mdash;neural network value estimate replaces rollout evaluation</li>
+      <li><strong>Residual architecture</strong>&mdash;deeper, more expressive network with skip connections</li>
+    </ul>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>The power of eliminating human data.</strong> AlphaGo Zero surpassed the original AlphaGo (which used human expert data) within 36 hours of training, ultimately achieving a 100&ndash;0 record against the version that defeated Lee Sedol. This demonstrates that human expert data can actually be a <em>liability</em>: it constrains the system to human-like play rather than allowing it to discover potentially superior strategies. AlphaGo Zero discovered novel joseki (standard patterns) and strategies that human experts found revelatory.</p>
+    </div>
+
+    <h3 id="alphazero-2018">AlphaZero (2018)</h3>
+
+    <p>AlphaZero generalized beyond Go to <strong>chess</strong> and <strong>shogi</strong> with minimal game-specific modifications. The same algorithm and architecture achieved superhuman play in all three games within hours of training&mdash;defeating Stockfish (chess), Elmo (shogi), and AlphaGo Zero (Go). The only game-specific components were the rules for legal moves and the board representation.</p>
+
+    <!-- Section 6: Evaluation and Ablations -->
+    <h2 id="evaluation">Evaluation and Ablations</h2>
+
+    <p>Which design choices actually matter? The ablation studies from Silver et al. (2017) give us a clear answer. Three experiments are particularly revealing.</p>
+
+    <h3 id="ablation-architecture">Impact of Architecture</h3>
+
+    <p>Comparing four network architectures by Elo rating after the same amount of training:</p>
+
+    <ul>
+      <li><strong>dual-res</strong> (dual-head residual network): ~4300 Elo&mdash;the best architecture</li>
+      <li><strong>sep-res</strong> (separate policy/value residual networks): ~3800 Elo</li>
+      <li><strong>dual-conv</strong> (dual-head convolutional network): ~3750 Elo</li>
+      <li><strong>sep-conv</strong> (separate policy/value convolutional networks): ~3100 Elo</li>
+    </ul>
+
+    <p>Two factors contribute to the dual-res advantage. First, <strong>residual connections</strong> enable deeper networks that learn more complex positional features. Second, the <strong>dual-head architecture</strong> forces shared representations between policy and value, acting as a regularizer&mdash;the policy head helps the value head generalize, and vice versa.</p>
+
+    <h3 id="ablation-mcts">Impact of MCTS</h3>
+
+    <p>Comparing Elo ratings with and without MCTS reveals the enormous value of search:</p>
+
+    <ul>
+      <li><strong>Raw network</strong> (no search): ~3000 Elo</li>
+      <li><strong>AlphaGo Zero</strong> (with MCTS): ~5000 Elo</li>
+      <li>Previous versions: AlphaGo Master ~4800, AlphaGo Lee ~3700, AlphaGo Fan ~3100</li>
+      <li>Traditional programs: Crazy Stone ~2000, Pachi ~1200, GnuGo ~400</li>
+    </ul>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>Search still matters.</strong> Even with a neural network strong enough to play at ~3000 Elo from raw policy outputs alone, MCTS adds ~2000 Elo points of playing strength. This underscores a fundamental lesson: combining learned intuition (the network) with deliberate planning (tree search) produces results far beyond either alone. This mirrors the human cognitive process of using intuition to <em>guide</em> search rather than replacing it.</p>
+    </div>
+
+    <h3 id="ablation-training">Training Progress</h3>
+
+    <p>AlphaGo Zero with 40 residual blocks surpasses AlphaGo Lee (the version that defeated Lee Sedol) within approximately 3 days of training. It surpasses AlphaGo Master within ~21 days, and reaches ~5000 Elo by 40 days&mdash;all without a single human game as input.</p>
+
+    <!-- Section 7: Beyond Games -->
+    <h2 id="beyond-games">Beyond Games &mdash; AlphaZero's Legacy</h2>
+
+    <p>What happens when you take these ideas beyond board games? It turns out that many optimization and discovery problems can be reframed as sequential decision-making over large combinatorial spaces&mdash;and the AlphaZero recipe works surprisingly well:</p>
+
+    <ul>
+      <li><strong>AlphaTensor</strong> (2022): Discovered faster matrix multiplication algorithms by framing the problem as a single-player game where moves correspond to tensor decomposition steps. Found algorithms faster than any known human-designed method for certain matrix sizes&mdash;the first improvement in decades for some cases.</li>
+      <li><strong>AlphaDev</strong> (2023): Discovered faster sorting algorithms by treating assembly instruction selection as a game. The resulting algorithms were incorporated into standard C++ libraries used by millions of developers worldwide.</li>
+    </ul>
+
+    <div class="callout insight">
+      <div class="callout-label">Key Insight</div>
+      <p><strong>RL as search.</strong> The unifying insight connecting AlphaGo to AlphaTensor and AlphaDev is that RL can vastly speed up hard optimization problems by representing them as search over combinatorial spaces. The neural network learns a heuristic that guides the search, while MCTS ensures systematic exploration. This paradigm shift&mdash;from hand-engineering solutions to <em>learning to search for them</em>&mdash;may be one of the most impactful legacies of the AlphaGo line of work.</p>
+    </div>
+
+    <!-- Section 8: UCT and the Bandit Connection -->
+    <h2 id="uct-bandit-connection">UCT and the Bandit Connection</h2>
+
+    <p>Let's make the bandit connection explicit. Recall from Lecture 13 that UCT applies UCB1 at every tree node:</p>
+
+    $$a = \arg\max_a \left[ Q(s, a) + c \sqrt{\frac{\ln N(s)}{N(s, a)}} \right]$$
+
+    <p>PUCT modifies this by weighting the exploration bonus with the neural network's prior $P(s,a)$. But why is there an exploration/exploitation problem during <em>simulated</em> episodes? Because computation is finite. We can only run so many simulations, and we want to allocate them efficiently. UCB minimizes regret in bandits; UCT minimizes "regret" in the allocation of simulation budget. This is the bridge between Lectures 10&ndash;11 (exploration theory) and Lectures 13&ndash;14 (planning).</p>
+
+    <p>MCTS excels when state spaces are large, a simulator is available, and we want an anytime algorithm. It can struggle when horizons and action spaces are both huge&mdash;the tree may not grow deep enough to capture long-term consequences.</p>
+
+    <!-- Section 9: Summary -->
+    <h2 id="summary">Summary</h2>
+
+    <p>We've traced the arc from Go as an AI grand challenge to the general-purpose AlphaZero framework. The progression is striking: each generation got <em>simpler</em> and <em>stronger</em>.</p>
+
+    <p>The core recipe: <strong>self-play</strong> for data generation (with automatic curriculum learning), <strong>MCTS</strong> for strategic computation guided by learned priors, and a <strong>dual-headed neural network</strong> providing both intuition and evaluation. The network-MCTS loop is generalized policy iteration&mdash;the same evaluate-improve cycle we've seen throughout this course, from dynamic programming to policy gradients.</p>
+
+    <p>Beyond games, the same framework discovered faster matrix multiplication (AlphaTensor) and sorting algorithms (AlphaDev). The unifying lesson: RL can vastly speed up hard optimization by learning to search combinatorial spaces, replacing hand-engineering with learned heuristics at every level.</p>
+
+  </article>
+
+  <nav class="lecture-nav">
+    <a class="prev" href="lecture13.html">
+      <span class="nav-dir">Previous</span>
+      <span class="nav-title">Monte Carlo Tree Search</span>
+    </a>
+    <span></span>
+  </nav>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body, {
+    delimiters: [{left: '$$', right: '$$', display: true},{left: '$', right: '$', display: false}],
+    macros: {'\\\\E': '\\\\mathbb{E}','\\\\R': '\\\\mathbb{R}','\\\\Vpi': 'V^{\\\\pi}','\\\\Qpi': 'Q^{\\\\pi}','\\\\Vstar': 'V^{*}','\\\\Qstar': 'Q^{*}'}
+  });"></script>
+<script src="../scripts/lecture.js"></script>
+</body>
+</html>

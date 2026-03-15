@@ -37,7 +37,7 @@
       <span class="lecture-tag">PAC-MDP</span>
       <span class="lecture-tag">Exploration in MDPs</span>
     </div>
-    <a class="lecture-pdf-link" href="../slides/lecture10pre.pdf" target="_blank">
+    <a class="lecture-pdf-link" href="../slides/lecture10post.pdf" target="_blank">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       Original PDF slides
     </a>
@@ -120,55 +120,56 @@
       The strategy: bound $\mathbb{E}[N_i(n)]$ for each suboptimal arm $i$, then plug into the regret decomposition. Without loss of generality, assume arm 1 is optimal ($a^* = a_1$).
     </p>
 
-    <div class="proof">
-      <div class="proof-title">Proof Sketch</div>
+    <details class="proof">
+      <summary>Proof Sketch</summary>
+      <div class="proof-content">
+        <p><strong>Step 1: Define the "good event."</strong> For each suboptimal arm $i$, define the good event $G_i$ as two conditions holding simultaneously:</p>
 
-      <p><strong>Step 1: Define the "good event."</strong> For each suboptimal arm $i$, define the good event $G_i$ as two conditions holding simultaneously:</p>
+        <p>Condition (*): The UCB for the optimal arm always exceeds its true mean:</p>
+        <p>$$\mu_1 \leq \min_{t \leq n}\, \text{UCB}_1(t, \delta) \quad \text{where } \text{UCB}_a(t, \delta) = \hat{Q}_t(a) + \sqrt{\frac{2\ln(1/\delta)}{N_t(a)}}$$</p>
 
-      <p>Condition (*): The UCB for the optimal arm always exceeds its true mean:</p>
-      <p>$$\mu_1 \leq \min_{t \leq n}\, \text{UCB}_1(t, \delta) \quad \text{where } \text{UCB}_a(t, \delta) = \hat{Q}_t(a) + \sqrt{\frac{2\ln(1/\delta)}{N_t(a)}}$$</p>
+        <p>Condition (**): For a carefully chosen number of pulls $u_i$, the UCB of arm $i$ falls below the true mean of arm 1:</p>
+        <p>$$\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} < \mu_1$$</p>
 
-      <p>Condition (**): For a carefully chosen number of pulls $u_i$, the UCB of arm $i$ falls below the true mean of arm 1:</p>
-      <p>$$\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} < \mu_1$$</p>
+        <p>
+          When both hold, the algorithm can distinguish arm $i$ from the optimum after $u_i$ pulls: the optimistic estimate for arm $i$ drops below what arm 1 can achieve.
+        </p>
 
-      <p>
-        When both hold, the algorithm can distinguish arm $i$ from the optimum after $u_i$ pulls: the optimistic estimate for arm $i$ drops below what arm 1 can achieve.
-      </p>
+        <p><strong>Step 2: Bound pulls under the good event.</strong> When $G_i$ holds, arm $i$ cannot be pulled more than $u_i$ times. Suppose for contradiction that arm $i$ has been pulled $u_i$ times and is selected again at time $t$. By (**), $\text{UCB}_i(t, \delta) < \mu_1$, and by (*), $\mu_1 \leq \text{UCB}_1(t, \delta)$. Chaining gives $\text{UCB}_i(t, \delta) < \text{UCB}_1(t, \delta)$, so the algorithm should have selected arm 1 instead&mdash;contradiction. Therefore:</p>
 
-      <p><strong>Step 2: Bound pulls under the good event.</strong> When $G_i$ holds, arm $i$ cannot be pulled more than $u_i$ times. Suppose for contradiction that arm $i$ has been pulled $u_i$ times and is selected again at time $t$. By (**), $\text{UCB}_i(t, \delta) < \mu_1$, and by (*), $\mu_1 \leq \text{UCB}_1(t, \delta)$. Chaining gives $\text{UCB}_i(t, \delta) < \text{UCB}_1(t, \delta)$, so the algorithm should have selected arm 1 instead&mdash;contradiction. Therefore:</p>
+        <p>$$\mathbb{E}\!\left[\mathbf{1}(G_i)\, N_i(n)\right] \leq u_i$$</p>
 
-      <p>$$\mathbb{E}\!\left[\mathbf{1}(G_i)\, N_i(n)\right] \leq u_i$$</p>
+        <p><strong>Step 3: Bound the probability of the bad event.</strong> We decompose the expected pull count using the law of total expectation:</p>
 
-      <p><strong>Step 3: Bound the probability of the bad event.</strong> We decompose the expected pull count using the law of total expectation:</p>
+        <p>$$\mathbb{E}[N_i(n)] = \mathbb{E}[\mathbf{1}(G_i)\, N_i(n)] + \mathbb{E}[\mathbf{1}(G_i^c)\, N_i(n)] \leq u_i + n \cdot P(G_i^c)$$</p>
 
-      <p>$$\mathbb{E}[N_i(n)] = \mathbb{E}[\mathbf{1}(G_i)\, N_i(n)] + \mathbb{E}[\mathbf{1}(G_i^c)\, N_i(n)] \leq u_i + n \cdot P(G_i^c)$$</p>
+        <p>To bound $P(G_i^c)$, analyze each condition separately. For (*), union-bounding over all time steps and applying Hoeffding's inequality:</p>
 
-      <p>To bound $P(G_i^c)$, analyze each condition separately. For (*), union-bounding over all time steps and applying Hoeffding's inequality:</p>
+        <p>$$P\!\left(\mu_1 > \min_{t \leq n} \text{UCB}_1(t, \delta)\right) \leq \sum_{s=1}^{n} P\!\left(\mu_1 > \hat{\mu}_{1,s} + \sqrt{\frac{2\ln(1/\delta)}{s}}\right) \leq n\delta$$</p>
 
-      <p>$$P\!\left(\mu_1 > \min_{t \leq n} \text{UCB}_1(t, \delta)\right) \leq \sum_{s=1}^{n} P\!\left(\mu_1 > \hat{\mu}_{1,s} + \sqrt{\frac{2\ln(1/\delta)}{s}}\right) \leq n\delta$$</p>
+        <p>For (**), applying Hoeffding to the empirical mean after $u_i$ pulls, provided $u_i$ is large enough that $\sqrt{2\ln(1/\delta)/u_i} \leq c\Delta_i$ for some $c \in (0,1)$:</p>
 
-      <p>For (**), applying Hoeffding to the empirical mean after $u_i$ pulls, provided $u_i$ is large enough that $\sqrt{2\ln(1/\delta)/u_i} \leq c\Delta_i$ for some $c \in (0,1)$:</p>
+        <p>$$P\!\left(\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} \geq \mu_1\right) \leq \exp\!\left(-\frac{u_i\, c^2 \Delta_i^2}{2}\right)$$</p>
 
-      <p>$$P\!\left(\hat{\mu}_{i,u_i} + \sqrt{\frac{2\ln(1/\delta)}{u_i}} \geq \mu_1\right) \leq \exp\!\left(-\frac{u_i\, c^2 \Delta_i^2}{2}\right)$$</p>
+        <p><strong>Step 4: Choose $u_i$ and combine.</strong> Rearranging the constraint:</p>
 
-      <p><strong>Step 4: Choose $u_i$ and combine.</strong> Rearranging the constraint:</p>
+        <p>$$u_i \geq \frac{2\ln(1/\delta)}{c^2 \Delta_i^2}$$</p>
 
-      <p>$$u_i \geq \frac{2\ln(1/\delta)}{c^2 \Delta_i^2}$$</p>
+        <p>Setting $c = 1/2$ and $\delta = 1/n^2$, so that $\ln(1/\delta) = 2\ln n$, yields:</p>
 
-      <p>Setting $c = 1/2$ and $\delta = 1/n^2$, so that $\ln(1/\delta) = 2\ln n$, yields:</p>
+        <p>$$u_i = \frac{16\ln n}{\Delta_i^2}$$</p>
 
-      <p>$$u_i = \frac{16\ln n}{\Delta_i^2}$$</p>
+        <p>Substituting back and combining failure probabilities:</p>
 
-      <p>Substituting back and combining failure probabilities:</p>
+        <p>$$\mathbb{E}[N_i(n)] \leq \frac{16\ln n}{\Delta_i^2} + 3$$</p>
 
-      <p>$$\mathbb{E}[N_i(n)] \leq \frac{16\ln n}{\Delta_i^2} + 3$$</p>
+        <p>Plugging into the regret decomposition $\text{Regret}(n) = \sum_{i:\Delta_i > 0} \Delta_i \cdot \mathbb{E}[N_i(n)]$ yields:</p>
 
-      <p>Plugging into the regret decomposition $\text{Regret}(n) = \sum_{i:\Delta_i > 0} \Delta_i \cdot \mathbb{E}[N_i(n)]$ yields:</p>
+        <p>$$\text{Regret}(n) \leq \sum_{i:\,\Delta_i > 0} \left(\frac{16\ln n}{\Delta_i} + 3\Delta_i\right)$$</p>
 
-      <p>$$\text{Regret}(n) \leq \sum_{i:\,\Delta_i > 0} \left(\frac{16\ln n}{\Delta_i} + 3\Delta_i\right)$$</p>
-
-      <p>which completes the proof. $\square$</p>
-    </div>
+        <p>which completes the proof. $\square$</p>
+      </div>
+    </details>
 
     <div class="callout insight">
       <div class="callout-label">Insight &mdash; Why Logarithmic Regret is Achievable</div>
@@ -337,13 +338,13 @@
     <p>$$N_\epsilon = \tilde{O}\!\left(\frac{|\mathcal{S}|^2 |\mathcal{A}|}{\epsilon^2(1-\gamma)^4}\right)$$</p>
 
     <p>
-      where $\tilde{O}$ hides logarithmic factors&mdash;polynomial in all quantities, confirming efficient exploration is possible. For regret minimization in episodic MDPs, the best known algorithms (e.g., UCBVI) achieve:
+      where $\tilde{O}$ hides logarithmic factors&mdash;polynomial in all quantities, confirming efficient exploration is possible. For regret minimization in episodic MDPs, algorithms like UCBVI achieve:
     </p>
 
     <p>$$\text{Regret}(T) = \tilde{O}\!\left(\sqrt{|\mathcal{S}||\mathcal{A}| H^3 T}\right)$$</p>
 
     <p>
-      where $H$ is the episode length and $T$ the total number of episodes. This matches lower bounds up to logarithmic factors&mdash;the exploration problem in tabular MDPs is essentially solved in theory.
+      where $H$ is the episode length and $T$ the total number of episodes. The minimax-optimal rate replaces $H^3$ with $H^2$; the result above is near-optimal and illustrates that efficient exploration in tabular MDPs is well understood in theory.
     </p>
 
     <div class="callout insight">
