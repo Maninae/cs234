@@ -1,6 +1,6 @@
 <p align="center">
 
-$$V^{*}(s)=\max_a\left[R(s,a)+\gamma\sum_{s'}P(s'\mid s,a)\,V^{*}(s')\right]$$
+$$V^{\ast}(s)=\max_a\left[R(s,a)+\gamma\sum_{s^{\prime}}P(s^{\prime}\mid s,a)\,V^{\ast}(s^{\prime})\right]$$
 
 </p>
 
