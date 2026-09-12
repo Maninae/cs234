@@ -1062,3 +1062,24 @@ body::before {
   .callout { padding: 18px 20px; }
   .algorithm { padding: 18px 20px; }
 }
+
+/* ── Hub footer (index) ── */
+.site-footer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 60px 48px;
+  border-top: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  color: var(--ink-muted);
+}
+.site-footer a {
+  color: var(--ink-light);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent-border);
+}
+.site-footer a:hover { color: var(--accent); }
+
+@media (max-width: 768px) {
+  .site-footer { padding: 24px 24px 40px; }
+}
