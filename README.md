@@ -1,4 +1,10 @@
 <p align="center">
+  <a href="https://maninae.github.io/cs234">
+    <img src="preview.png" alt="Site preview" width="720">
+  </a>
+</p>
+
+<p align="center">
 
 $$V^{\ast}(s)=\max_a\left[R(s,a)+\gamma\sum_{s^{\prime}}P(s^{\prime}\mid s,a)\,V^{\ast}(s^{\prime})\right]$$
 
@@ -16,12 +22,6 @@ $$V^{\ast}(s)=\max_a\left[R(s,a)+\gamma\sum_{s^{\prime}}P(s^{\prime}\mid s,a)\,V
   <a href="#"><img alt="Lectures" src="https://img.shields.io/badge/lectures-11-E8A87C?style=flat-square"></a>
   <a href="#"><img alt="Modules" src="https://img.shields.io/badge/modules-7-85CDCA?style=flat-square"></a>
 <a href="#"><img alt="Math rendered" src="https://img.shields.io/badge/KaTeX-equations%20everywhere-6C63FF?style=flat-square"></a>
-</p>
-
-<p align="center">
-  <a href="https://maninae.github.io/cs234">
-    <img src="preview.png" alt="Site preview" width="720">
-  </a>
 </p>
 
 ---
